@@ -1,3 +1,10 @@
+frontik (2.12.1) unstable; urgency=low
+
+  [ Vasily Katraev]
+  * HH-25681 debug with extra fix
+
+ -- Vasily Katraev (hh.ru) <v.katraev@hh.ru>  Sat, 05 May 2012 12:50:06 +0400
+
 frontik (2.12.0) unstable; urgency=low
 
   [ Pavel Trukhanov ]
