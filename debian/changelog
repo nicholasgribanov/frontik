@@ -1,3 +1,10 @@
+frontik (2.12.2) unstable; urgency=low
+
+  [ Vasily Katraev ]
+  * HH-25681 memory leak in loggerAdapter fix 
+
+ -- Vasily Katraev (hh.ru) <v.katraev@hh.ru>  Thu, 24 May 2012 18:56:22 +0400
+
 frontik (2.12.1) unstable; urgency=low
 
   [ Vasily Katraev]
