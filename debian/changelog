@@ -1,3 +1,10 @@
+frontik (2.12.4) unstable; urgency=low
+
+  [Vasily Katarev ]
+  * HH-25681 fix record xml attribute for dump
+
+ -- Vasily Katraev (hh.ru) <v.katraev@hh.ru>  Wed, 30 May 2012 15:46:09 +0400
+
 frontik (2.12.3) unstable; urgency=low
 
   [ Georgiy Danschin ]
