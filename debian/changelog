@@ -1,3 +1,13 @@
+frontik (2.12.5) unstable; urgency=low
+
+  [ Pavel Trukhanov ]
+  * HH-21428 fix None bool compare
+  
+  [ Vasily Katraev ]
+  * HH-26775 option for no logging jobsin10secs, uptime in /status/
+
+ -- Vasily Katraev (hh.ru) <v.katraev@hh.ru>  Wed, 20 Jun 2012 15:46:23 +0400
+
 frontik (2.12.4) unstable; urgency=low
 
   [Vasily Katarev ]
