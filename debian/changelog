@@ -1,3 +1,9 @@
+frontik (2.28.22) unstable; urgency=medium
+
+  * HH-71548 build python3 deb package
+
+ -- Automated Build <an.sumin@hh.ru>  Mon, 07 Aug 2017 12:05:51 +0300
+
 frontik (2.28.21) unstable; urgency=medium
 
   * HH-70830 update js-libs
