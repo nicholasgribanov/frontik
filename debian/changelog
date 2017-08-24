@@ -1,3 +1,9 @@
+frontik (2.29.1) unstable; urgency=medium
+
+  * HH-72025 clean things up after removing Tornado patch
+
+ -- Automated Build <an.sumin@hh.ru>  Thu, 24 Aug 2017 18:09:40 +0300
+
 frontik (2.28.24) unstable; urgency=medium
 
   * HH-70485 remove logging patch
