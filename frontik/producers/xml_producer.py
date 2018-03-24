@@ -1,6 +1,7 @@
 # coding=utf-8
 
 import copy
+import logging
 import time
 import weakref
 from concurrent.futures import ThreadPoolExecutor
@@ -15,6 +16,21 @@ from frontik import file_cache
 from frontik.producers import ProducerFactory
 from frontik.util import get_abs_path, raise_future_exception
 from frontik.xml_util import xml_from_file, xsl_from_file
+
+_XSL_CACHE = {}
+log = logging.getLogger('frontik.producers.xml_producer')
+
+
+def init_xsl_cache():
+    import glob
+    path = '/Users/andrew/code/hh.sites.main/xhh/xsl'
+    files = glob.glob('{}/*/*/*/*.xsl'.format(path))
+    for file in files:
+        _XSL_CACHE[file] = xsl_from_file(file, log)
+
+
+def touch_xsl():
+    return [x(etree.fromstring('<doc/>')) for x in _XSL_CACHE.values()]
 
 
 class XMLProducerFactory(ProducerFactory):
