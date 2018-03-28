@@ -22,6 +22,10 @@ class JsonProducerFactory(ProducerFactory):
         if hasattr(application, 'get_jinja_environment'):
             self.environment = application.get_jinja_environment()
         elif options.jinja_template_root is not None:
+            import logging
+            logging.getLogger('WTF').info(options.jinja_template_cache_limit)
+            logging.getLogger('WTF').info(get_abs_path(application.app_root, options.jinja_template_root))
+
             self.environment = jinja2.Environment(
                 auto_reload=options.debug,
                 cache_size=options.jinja_template_cache_limit,
@@ -126,6 +130,9 @@ class JsonProducer(object):
 
         if self.handler._headers.get('Content-Type') is None:
             self.handler.set_header('Content-Type', 'text/html; charset=utf-8')
+
+        import logging
+        logging.getLogger('WTF').info(options.jinja_streaming_render_timeout_ms)
 
         render_future = self._render_template_stream_on_ioloop(options.jinja_streaming_render_timeout_ms)
 
