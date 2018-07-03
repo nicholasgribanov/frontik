@@ -28,9 +28,10 @@ def run_command(command, port):
     else:
         template = '{exe} {command} {args}'
 
-    args = '--port={port} --logfile={logfile}'.format(
+    args = '--port={port} --service_logfile={service_logfile} --requests_logfile={requests_logfile}'.format(
         port=port,
-        logfile=os.path.join(FRONTIK_ROOT, 'frontik_test.log')
+        service_logfile=os.path.join(FRONTIK_ROOT, 'service_test.log'),
+        requests_logfile=os.path.join(FRONTIK_ROOT, 'requests_test.log')
     )
 
     executable = template.format(

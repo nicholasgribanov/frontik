@@ -4,9 +4,7 @@ import logging
 import time
 from collections import namedtuple
 
-from frontik.request_context import RequestContext
-
-logger = None  # for smooth transition from LoggerAdapter instances to the global logger
+from frontik.loggers import REQUESTS_LOGGER
 
 _logger = logging.getLogger('frontik.handler')
 
@@ -46,13 +44,7 @@ class RequestLogger(logging.LoggerAdapter):
         stages_str = ' '.join('{s.name}={s.delta:.2f}'.format(s=s) for s in self.stages)
         total = sum(s.delta for s in self.stages)
 
-        self.info(
-            'timings for %(page)s : %(stages)s',
-            {
-                'page': RequestContext.get('handler_name'),
-                'stages': '{0} total={1:.2f} code={2}'.format(stages_str, total, status_code)
-            },
-        )
+        REQUESTS_LOGGER.info('{0} total={1:.2f} code={2}'.format(stages_str, total, status_code))
 
     def process(self, msg, kwargs):
         if 'extra' in kwargs:

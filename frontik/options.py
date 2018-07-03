@@ -1,74 +1,85 @@
 # coding=utf-8
 
-import tornado.options
+from tornado.options import define
 
-tornado.options.define('app', default=None, type=str)
-tornado.options.define('app_class', default=None, type=str)
-tornado.options.define('tornado_settings', default=None, type=dict)
-tornado.options.define('handlers_count', default=100, type=int)
-tornado.options.define('reuse_port', default=True, type=bool)
-tornado.options.define('xheaders', default=False, type=bool)
+define('app', None, str)
+define('app_class', None, str)
+define('tornado_settings', None, dict)
+define('handlers_count', 100, int)
+define('reuse_port', True, bool)
+define('xheaders', False, bool)
 
-tornado.options.define('config', None, str)
-tornado.options.define('host', '0.0.0.0', str)
-tornado.options.define('port', 8080, int)
+define('config', None, str)
+define('host', '0.0.0.0', str)
+define('port', 8080, int)
 
-tornado.options.define('autoreload', False, bool)
-tornado.options.define('stop_timeout', 3, int)
-tornado.options.define('log_blocked_ioloop_timeout', 0, float)
+define('autoreload', False, bool)
+define('stop_timeout', 3, int)
+define('log_blocked_ioloop_timeout', 0, float)
 
-tornado.options.define('loglevel', default='info', type=str, help='Log level')
-tornado.options.define('logformat', default='[%(process)s] %(asctime)s %(levelname)s %(name)s: %(message)s', type=str,
-                       help='Log format for files and syslog')
-tornado.options.define('logfile', default=None, type=str, help='Log file name')
+define('loglevel', 'info', str, 'Log level')
+define('service_logfile', None, str, 'Service log file name')
+define('requests_logfile', None, str, 'Request info log file name')
+define(
+    'logformat',
+    '%(name)s: [%(process)s] %(asctime)s %(levelname)s mdc={%(handler_name)s} rid={%(request_id)s} %(message)s',
+    str, 'Log format for files'
+)
 
-tornado.options.define('stderr_log', default=False, type=bool,
-                       help='Send log output to stderr (colorized if possible).')
-tornado.options.define('stderr_format', default='%(color)s[%(levelname)1.1s %(asctime)s %(name)s '
-                                                '%(module)s:%(lineno)d]%(end_color)s %(message)s', type=str)
-tornado.options.define('stderr_dateformat', default='%y.%m.%d %H:%M:%S', type=str)
+define('stderr_log', False, bool, 'Send log output to stderr (colorized if possible).')
+define(
+    'stderr_logformat',
+    '%(color)s[%(levelname)1.1s %(asctime)s %(name)s %(module)s:%(lineno)d]%(end_color)s '
+    'mdc={%(handler_name)s} rid={%(request_id)s} %(message)s',
+    str
+)
 
-tornado.options.define('syslog', default=False, type=bool)
-tornado.options.define('syslog_address', default='/dev/log', type=str)
-tornado.options.define('syslog_port', default=None, type=int)
-tornado.options.define('syslog_facility', default='user', type=str)
+define('syslog', False, bool)
+define('syslog_address', '/dev/log', str)
+define('syslog_port', None, int)
+define('syslog_facility', 'user', str)
+define(
+    'syslog_logformat',
+    '%(name)s: [%(process)s] [%(asctime)s] %(levelname)s mdc={%(handler_name)s} rid={%(request_id)s} %(message)s',
+    str, 'Log format for syslog'
+)
 
-tornado.options.define('suppressed_loggers', default=['tornado.curl_httpclient'], type=list)
+define('suppressed_loggers', ['tornado.curl_httpclient'], list)
 
-tornado.options.define('debug', default=False, type=bool)
-tornado.options.define('debug_login', default=None, type=str)
-tornado.options.define('debug_password', default=None, type=str)
+define('debug', False, bool)
+define('debug_login', None, str)
+define('debug_password', None, str)
 
-tornado.options.define('datacenter', default=None, type=str)
+define('datacenter', None, str)
 
-tornado.options.define('http_client_default_connect_timeout_sec', default=0.2, type=float)
-tornado.options.define('http_client_default_request_timeout_sec', default=2.0, type=float)
-tornado.options.define('http_client_default_max_tries', default=2, type=int)
-tornado.options.define('http_client_default_max_timeout_tries', default=1, type=int)
-tornado.options.define('http_client_default_max_fails', default=0, type=int)
-tornado.options.define('http_client_default_fail_timeout_sec', default=10, type=float)
-tornado.options.define('http_client_default_retry_policy', default='timeout,http_503', type=str)
-tornado.options.define('http_proxy_host', default=None, type=str)
-tornado.options.define('http_proxy_port', default=3128, type=int)
-tornado.options.define('http_client_allow_cross_datacenter_requests', default=False, type=bool)
+define('http_client_default_connect_timeout_sec', 0.2, float)
+define('http_client_default_request_timeout_sec', 2.0, float)
+define('http_client_default_max_tries', 2, int)
+define('http_client_default_max_timeout_tries', 1, int)
+define('http_client_default_max_fails', 0, int)
+define('http_client_default_fail_timeout_sec', 10, float)
+define('http_client_default_retry_policy', 'timeout,http_503', str)
+define('http_proxy_host', None, str)
+define('http_proxy_port', 3128, int)
+define('http_client_allow_cross_datacenter_requests', False, bool)
 
-tornado.options.define('statsd_host', default=None, type=str)
-tornado.options.define('statsd_port', default=None, type=int)
+define('statsd_host', None, str)
+define('statsd_port', None, int)
 
-tornado.options.define('timeout_multiplier', default=1.0, type=float)
+define('timeout_multiplier', 1.0, float)
 
-tornado.options.define('xml_root', default=None, type=str)
-tornado.options.define('xml_cache_limit', default=None, type=int)
-tornado.options.define('xml_cache_step', default=None, type=int)
-tornado.options.define('xsl_root', default=None, type=str)
-tornado.options.define('xsl_cache_limit', default=None, type=int)
-tornado.options.define('xsl_cache_step', default=None, type=int)
-tornado.options.define('xsl_executor_pool_size', default=1, type=int)
-tornado.options.define('jinja_template_root', default=None, type=str)
-tornado.options.define('jinja_template_cache_limit', default=50, type=int)
-tornado.options.define('jinja_streaming_render_timeout_ms', default=50, type=int)
+define('xml_root', None, str)
+define('xml_cache_limit', None, int)
+define('xml_cache_step', None, int)
+define('xsl_root', None, str)
+define('xsl_cache_limit', None, int)
+define('xsl_cache_step', None, int)
+define('xsl_executor_pool_size', 1, int)
+define('jinja_template_root', None, str)
+define('jinja_template_cache_limit', 50, int)
+define('jinja_streaming_render_timeout_ms', 50, int)
 
-tornado.options.define('sentry_dsn', default=None, type=str, metavar='http://public:secret@example.com/1')
+define('sentry_dsn', None, str, metavar='http://public:secret@example.com/1')
 
-tornado.options.define('max_http_clients', default=100, type=int)
-tornado.options.define('max_http_clients_connects', default=None, type=int)
+define('max_http_clients', 100, int)
+define('max_http_clients_connects', None, int)
