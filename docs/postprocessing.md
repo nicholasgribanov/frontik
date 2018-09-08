@@ -12,8 +12,8 @@ self.add_postprocessor(postprocessor)
 where `postprocessor` is a callable:
 
 ```python
-def postprocessor(handler, callback):
-    callback()
+def postprocessor(handler):
+    yield ...
 ```
 
 There are two types of postprocessors in Frontik:

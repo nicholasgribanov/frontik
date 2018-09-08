@@ -23,10 +23,10 @@ class Page(PageHandler):
         if self.get_argument('content', None) is not None:
             self.add_template_postprocessor(ContentPostprocessor())
 
-    def _early_pp_1(self, callback):
+    def _early_pp_1(self):
         raise HTTPError(400)
 
-    def _early_pp_2(self, callback):
+    def _early_pp_2(self):
         raise HTTPError(500)
 
     def _header_pp(self, tpl, callback):

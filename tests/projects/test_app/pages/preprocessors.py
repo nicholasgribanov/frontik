@@ -1,5 +1,6 @@
 import time
 
+from tornado import gen
 from tornado.concurrent import Future
 from tornado.web import HTTPError
 
@@ -67,8 +68,6 @@ class Page(PageHandler):
     def prepare(self):
         super(Page, self).prepare()
 
-        self._use_new_preprocessors = True
-
         self.run = []
         self.json.put({
             'run': self.run
@@ -89,6 +88,6 @@ class Page(PageHandler):
         self.text = {'put_request_preprocessors': self.run}
 
     @staticmethod
-    def postprocessor(handler, callback):
+    def postprocessor(handler):
         handler.json.put({'postprocessor': True})
-        handler.add_timeout(time.time() + 0.1, callback)
+        yield gen.sleep(0.1)

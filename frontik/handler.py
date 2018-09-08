@@ -254,8 +254,11 @@ class PageHandler(RequestHandler):
             self.finish_with_postprocessors()
 
     def _finish_page_cb(self):
-        def _callback():
+        def _callback(future):
             self.log.stage_tag('page')
+
+            if not future.result():
+                self.log.info('postprocessors chain was broken, skipping page producer')
 
             if self.text is not None:
                 producer = self._generic_producer
@@ -267,7 +270,7 @@ class PageHandler(RequestHandler):
             self.log.debug('using %s producer', producer)
             producer(partial(self._call_postprocessors, self._template_postprocessors, self.finish))
 
-        self._call_postprocessors(self._postprocessors, _callback)
+        self.add_future(self._run_postprocessors(self._postprocessors, self), _callback)
 
     def on_connection_close(self):
         self.finish_group.abort()
@@ -385,6 +388,16 @@ class PageHandler(RequestHandler):
 
         self.preprocessors_group.try_finish()
         yield self.preprocessors_group.get_finish_future()
+
+        raise gen.Return(True)
+
+    @gen.coroutine
+    def _run_postprocessors(self, postprocessors, *args, **kwargs):
+        for p in postprocessors:
+            yield gen.coroutine(p)(*args, **kwargs)
+            if self._finished or self._page_aborted:
+                self.log.warning('page has already started finishing, breaking postprocessors chain')
+                raise gen.Return(False)
 
         raise gen.Return(True)
 

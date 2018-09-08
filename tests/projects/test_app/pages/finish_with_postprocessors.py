@@ -8,9 +8,8 @@ class Page(PageHandler):
     def prepare(self):
         super(Page, self).prepare()
 
-        def pp(handler, cb):
+        def pp(handler):
             handler.add_header('X-Foo', 'Bar')
-            cb()
 
         self.add_postprocessor(pp)
 
