@@ -6,6 +6,7 @@ import tornado.curl_httpclient
 import tornado.httputil
 import tornado.web
 from tornado import gen, stack_context
+from tornado.concurrent import Future
 from tornado.ioloop import IOLoop
 from tornado.options import options
 from tornado.web import RequestHandler
@@ -263,8 +264,11 @@ class PageHandler(RequestHandler):
             else:
                 producer = self.xml_producer
 
+            def _producer_callback(producer_future):
+                self._call_postprocessors(self._template_postprocessors, self.finish, producer_future.result())
+
             self.log.debug('using %s producer', producer)
-            producer(partial(self._call_postprocessors, self._template_postprocessors, self.finish))
+            self.add_future(producer(), _producer_callback)
 
         self.add_future(self._run_postprocessors(self._postprocessors, self), _callback)
 
@@ -423,13 +427,15 @@ class PageHandler(RequestHandler):
 
     # Producers
 
-    def _generic_producer(self, callback):
+    def _generic_producer(self):
         self.log.debug('finishing plaintext')
 
         if self._headers.get('Content-Type') is None:
             self.set_header('Content-Type', 'text/html; charset=UTF-8')
 
-        callback(self.text)
+        future = Future()
+        future.set_result(self.text)
+        return future
 
     def xml_from_file(self, filename):
         return self.xml_producer.xml_from_file(filename)

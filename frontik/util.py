@@ -6,7 +6,6 @@ from uuid import uuid4
 
 from tornado.concurrent import Future
 from tornado.escape import to_unicode, utf8
-from tornado.util import raise_exc_info
 
 
 def list_unique(l):
@@ -177,15 +176,11 @@ def reverse_regex_named_groups(pattern, *args, **kwargs):
     return result.replace('^', '').replace('$', '')
 
 
-def raise_future_exception(future):
-    exception = future.exception()
-
-    if isinstance(future, Future):
-        future.result()  # Raises the exception
-    elif hasattr(future, 'exception_info') and future.exception_info()[1] is not None:
-        raise_exc_info((type(exception),) + future.exception_info())
-    else:
-        raise exception
+def copy_future_exception(a, b):
+    if hasattr(a, 'exc_info') and a.exc_info() is not None:
+        b.set_exc_info(a.exc_info())
+    elif a.exception() is not None:
+        b.set_exception(a.exception())
 
 
 def get_abs_path(root_path, relative_path):

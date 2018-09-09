@@ -1,17 +1,16 @@
+import sys
 import time
 import weakref
 from functools import partial
 
 import jinja2
-import sys
-import tornado.ioloop
 from jinja2.utils import concat
 from tornado.concurrent import Future
-from tornado.escape import to_unicode, utf8
+from tornado.escape import to_unicode
 from tornado.options import options
 
 import frontik.json_builder
-from frontik.util import get_abs_path, get_cookie_or_url_param_value, raise_future_exception
+from frontik.util import get_abs_path, get_cookie_or_url_param_value, copy_future_exception
 from frontik.producers import ProducerFactory
 
 
@@ -41,23 +40,22 @@ class JsonProducer:
     def __init__(self, handler, environment=None, json_encoder=None, jinja_context_provider=None):
         self.handler = weakref.proxy(handler)
         self.log = weakref.proxy(self.handler.log)
-        self.ioloop = tornado.ioloop.IOLoop.current()
 
         self.json = frontik.json_builder.JsonBuilder(json_encoder=json_encoder)
         self.template_filename = None
         self.environment = environment
         self.jinja_context_provider = jinja_context_provider
 
-    def __call__(self, callback):
+    def __call__(self):
         if get_cookie_or_url_param_value(self.handler, 'notpl') is not None:
             self.handler.require_debug_access()
             self.log.debug('ignoring templating because notpl parameter is passed')
-            return self._finish_with_json(callback)
+            return self._finish_with_json()
 
         if self.template_filename:
-            self._finish_with_template(callback)
-        else:
-            self._finish_with_json(callback)
+            return self._finish_with_template()
+
+        return self._finish_with_json()
 
     def set_template(self, filename):
         self.template_filename = filename
@@ -112,20 +110,20 @@ class JsonProducer:
             if whole_template_render_finished:
                 render_future.set_result((template_render_start_time, concat(template_parts)))
             else:
-                self.ioloop.add_callback(partial(_render_template_part, part_index + 1))
+                self.handler.add_callback(partial(_render_template_part, part_index + 1))
 
         _render_template_part()
 
         return render_future
 
-    def _finish_with_template(self, callback):
+    def _finish_with_template(self):
         if not self.environment:
             raise Exception('Cannot apply template, no Jinja2 environment configured')
 
         if self.handler._headers.get('Content-Type') is None:
             self.handler.set_header('Content-Type', 'text/html; charset=utf-8')
 
-        render_future = self._render_template_stream_on_ioloop(options.jinja_streaming_render_timeout_ms)
+        result_future = Future()
 
         def job_callback(future):
             if future.exception() is not None:
@@ -141,7 +139,7 @@ class JsonProducer:
                 elif isinstance(exception, jinja2.TemplateError):
                     self.log.error('%s error\n\t%s', exception.__class__.__name__, to_unicode(exception.message))
 
-                raise_future_exception(future)
+                copy_future_exception(future, result_future)
                 return
 
             start_time, result = future.result()
@@ -149,16 +147,20 @@ class JsonProducer:
             self.log.stage_tag('tpl')
             self.log.info('applied template %s in %.2fms', self.template_filename, (time.time() - start_time) * 1000)
 
-            callback(result)
+            result_future.set_result(result)
 
-        self.ioloop.add_future(render_future, self.handler.check_finished(job_callback))
-        return render_future
+        render_future = self._render_template_stream_on_ioloop(options.jinja_streaming_render_timeout_ms)
+        self.handler.add_future(render_future, self.handler.check_finished(job_callback))
+        return result_future
 
-    def _finish_with_json(self, callback):
+    def _finish_with_json(self):
         self.log.debug('finishing without templating')
         if self.handler._headers.get('Content-Type') is None:
             self.handler.set_header('Content-Type', 'application/json; charset=utf-8')
-        callback(self.json.to_string())
+
+        future = Future()
+        future.set_result(self.json.to_string())
+        return future
 
     def __repr__(self):
         return '{}.{}'.format(__package__, self.__class__.__name__)
