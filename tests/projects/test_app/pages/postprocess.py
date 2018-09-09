@@ -1,33 +1,37 @@
+from tornado import gen
 from tornado.web import HTTPError
 
 from frontik.handler import PageHandler
 
 
 class ContentPostprocessor:
-    def __call__(self, handler, tpl, callback):
-        callback(tpl.replace('%%content%%', 'CONTENT'))
+    def postprocessor(self, handler, tpl):
+        raise gen.Return(tpl.replace('%%content%%', 'CONTENT'))
 
 
 class Page(PageHandler):
     def get_page(self):
-        if self.get_argument('fail_early', None) is not None:
-            self.add_postprocessor(Page._early_pp_1)
-            self.add_postprocessor(Page._early_pp_2)
+        if self.get_argument('raise_error', None) is not None:
+            self.add_postprocessor(Page._pp1)
 
-        self.set_template('postprocess.html')
-        self.json.put({'content': '%%content%%'})
+        if self.get_argument('finish', None) is not None:
+            self.add_postprocessor(Page._pp2)
 
         if self.get_argument('header', None) is not None:
             self.add_template_postprocessor(Page._header_pp)
 
         if self.get_argument('content', None) is not None:
-            self.add_template_postprocessor(ContentPostprocessor())
+            content_postprocessor = ContentPostprocessor()
+            self.add_template_postprocessor(content_postprocessor.postprocessor)
+
+        self.set_template('postprocess.html')
+        self.json.put({'content': '%%content%%'})
 
     def _early_pp_1(self):
         raise HTTPError(400)
 
     def _early_pp_2(self):
-        raise HTTPError(500)
+        self.finish('FINISH_IN_PP')
 
-    def _header_pp(self, tpl, callback):
-        callback(tpl.replace('%%header%%', 'HEADER'))
+    def _header_pp(self, tpl):
+        raise gen.Return(tpl.replace('%%header%%', 'HEADER'))

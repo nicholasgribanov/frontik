@@ -1,6 +1,6 @@
 import http.client
 import logging
-from functools import partial, wraps
+from functools import wraps
 
 import tornado.curl_httpclient
 import tornado.httputil
@@ -66,7 +66,7 @@ class PageHandler(RequestHandler):
     def prepare(self):
         self.active_limit = frontik.handler_active_limit.PageHandlerActiveLimit(self.request)
         self.debug_mode = DebugMode(self)
-        self.finish_group = AsyncGroup(self.check_finished(self._finish_page_cb), name='finish')
+        self.finish_group = AsyncGroup(self._finish_page_cb, name='finish')
         self._handler_finished_notification = self.finish_group.add_notification()
 
         self.json_producer = self.application.json.get_producer(self)
@@ -189,7 +189,7 @@ class PageHandler(RequestHandler):
         self.log.stage_tag('prepare')
 
         preprocessors = _unwrap_preprocessors(self.preprocessors) + _get_preprocessors(page_handler_method.__func__)
-        preprocessors_finished = yield self._run_preprocessors(preprocessors, self)
+        preprocessors_finished = yield self._run_preprocessors(preprocessors)
 
         if not preprocessors_finished:
             self.log.info('page has already started finishing, skipping page method')
@@ -220,11 +220,6 @@ class PageHandler(RequestHandler):
         self.set_header('Allow', ', '.join(allowed_methods))
         raise HTTPErrorWithPostprocessors(405)
 
-    # HTTP client methods
-
-    def modify_http_client_request(self, balanced_request):
-        pass
-
     # Finish page
 
     def is_finished(self):
@@ -251,26 +246,37 @@ class PageHandler(RequestHandler):
             self.finish_with_postprocessors()
 
     def _finish_page_cb(self):
-        def _callback(future):
-            self.log.stage_tag('page')
+        def _cb(future):
+            if future.result() is not None:
+                self.finish(future.result())
 
-            if not future.result():
-                self.log.info('postprocessors chain was broken, skipping page producer')
+        self.add_future(self._postprocess(), _cb)
 
-            if self.text is not None:
-                producer = self._generic_producer
-            elif not self.json.is_empty():
-                producer = self.json_producer
-            else:
-                producer = self.xml_producer
+    @gen.coroutine
+    def _postprocess(self):
+        if self._finished:
+            self.log.info('page has already started finishing, skipping postprocessors')
+            return
 
-            def _producer_callback(producer_future):
-                self._call_postprocessors(self._template_postprocessors, self.finish, producer_future.result())
+        postprocessors_finished = yield self._run_postprocessors(self._postprocessors)
+        self.log.stage_tag('page')
 
-            self.log.debug('using %s producer', producer)
-            self.add_future(producer(), _producer_callback)
+        if not postprocessors_finished:
+            self.log.info('page has already started finishing, skipping page producer')
+            return
 
-        self.add_future(self._run_postprocessors(self._postprocessors, self), _callback)
+        if self.text is not None:
+            producer = self._generic_producer
+        elif not self.json.is_empty():
+            producer = self.json_producer
+        else:
+            producer = self.xml_producer
+
+        self.log.debug('using %s producer', producer)
+        produced_result = yield producer()
+
+        postprocessed_result = yield self._run_postprocessors(self._template_postprocessors, produced_result)
+        raise gen.Return(postprocessed_result)
 
     def on_connection_close(self):
         self.finish_group.abort()
@@ -377,11 +383,11 @@ class PageHandler(RequestHandler):
         return self.preprocessors_group.add_future(future)
 
     @gen.coroutine
-    def _run_preprocessors(self, preprocessors, *args, **kwargs):
+    def _run_preprocessors(self, preprocessors):
         self.preprocessors_group = AsyncGroup(lambda: None, name='preprocessors')
 
         for p in preprocessors:
-            yield gen.coroutine(p)(*args, **kwargs)
+            yield gen.coroutine(p)(self)
             if self._finished or self._page_aborted:
                 self.log.info('page has already started finishing, breaking preprocessors chain')
                 raise gen.Return(False)
@@ -396,28 +402,19 @@ class PageHandler(RequestHandler):
         raise gen.Return(True)
 
     @gen.coroutine
-    def _run_postprocessors(self, postprocessors, *args, **kwargs):
+    def _run_postprocessors(self, postprocessors, *args):
+        pp_result = args[0] if args else None
+
         for p in postprocessors:
-            yield gen.coroutine(p)(*args, **kwargs)
-            if self._finished or self._page_aborted:
+            pp_result = yield gen.coroutine(p)(self, *args)
+            if args and pp_result is not None:
+                args = [pp_result]
+
+            if self._finished:
                 self.log.warning('page has already started finishing, breaking postprocessors chain')
                 raise gen.Return(False)
 
-        raise gen.Return(True)
-
-    def _call_postprocessors(self, postprocessors, callback, *args):
-        self._chain_functions(iter(postprocessors), callback, 'postprocessor', *args)
-
-    def _chain_functions(self, functions, callback, chain_type, *args):
-        try:
-            func = next(functions)
-
-            def _callback(*args):
-                self._chain_functions(functions, callback, chain_type, *args)
-
-            self.warn_slow_callback(func)(self, *(args + (_callback,)))
-        except StopIteration:
-            callback(*args)
+        raise gen.Return(pp_result if pp_result is not None else True)
 
     def add_template_postprocessor(self, postprocessor):
         self._template_postprocessors.append(postprocessor)
@@ -447,6 +444,9 @@ class PageHandler(RequestHandler):
         return self.json_producer.set_template(filename)
 
     # HTTP client methods
+
+    def modify_http_client_request(self, balanced_request):
+        pass
 
     def group(self, futures, callback=None, name=None):
         return self._http_client.group(futures, callback, name)
