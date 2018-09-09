@@ -45,9 +45,9 @@ def pp2(handler):
     if handler.get_argument('raise_error', 'false') != 'false':
         raise HTTPError(400)
     elif handler.get_argument('abort_and_run_postprocessors', 'false') != 'false':
-        handler.abort_preprocessors(wait_finish_group=False)
+        handler.abort_page(wait_finish_group=False)
     elif handler.get_argument('wait_and_run_postprocessors', 'false') != 'false':
-        handler.abort_preprocessors(wait_finish_group=True)
+        handler.abort_page(wait_finish_group=True)
     elif handler.get_argument('redirect', 'false') != 'false':
         handler.redirect(handler.request.host + handler.request.path + '?redirected=true')
     elif handler.get_argument('finish', 'false') != 'false':

@@ -65,3 +65,12 @@ class TestPreprocessors(unittest.TestCase):
                 ]
             }
         )
+
+    def test_finish_in_nonblocking_group_preprocessor(self):
+        response = frontik_test_app.get_page('preprocessors/finish_in_nonblocking_group_preprocessor?finish=true')
+        self.assertEqual(response.content, 'DONE_IN_PP')
+        self.assertEqual(response.status_code, 400)
+
+    def test_abort_finish_in_nonblocking_group_preprocessor(self):
+        response = frontik_test_app.get_page('preprocessors/finish_in_nonblocking_group_preprocessor?abort=true')
+        self.assertEqual(response.status_code, 400)

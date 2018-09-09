@@ -190,15 +190,11 @@ class PageHandler(RequestHandler):
         preprocessors = _unwrap_preprocessors(self.preprocessors) + _get_preprocessors(page_handler_method.__func__)
         preprocessors_finished = yield self._run_preprocessors(preprocessors, self)
 
-        if not preprocessors_finished:
-            self.log.info('preprocessors chain was broken, skipping page method')
-        elif self.is_finished():
-            self.log.info('page was finished in preprocessors, skipping page method')
+        if not preprocessors_finished or self._finished:
+            self.log.info('page has already started finishing, skipping page method')
         else:
             yield gen.coroutine(page_handler_method)()
             self._handler_finished_notification()
-
-        yield self.preprocessors_group.get_finish_future()
 
     def get_page(self):
         """ This method can be implemented in the subclass """
@@ -246,7 +242,7 @@ class PageHandler(RequestHandler):
     def finish_with_postprocessors(self):
         self.finish_group.finish()
 
-    def abort_preprocessors(self, wait_finish_group=True):
+    def abort_page(self, wait_finish_group=True):
         self._page_aborted = True
         if wait_finish_group:
             self._handler_finished_notification()
@@ -383,11 +379,15 @@ class PageHandler(RequestHandler):
         for p in preprocessors:
             yield gen.coroutine(p)(*args, **kwargs)
             if self._finished or self._page_aborted:
-                self.log.warning('page has already started finishing, breaking preprocessors chain')
+                self.log.info('page has already started finishing, breaking preprocessors chain')
                 raise gen.Return(False)
 
         self.preprocessors_group.try_finish()
         yield self.preprocessors_group.get_finish_future()
+
+        if self._finished or self._page_aborted:
+            self.log.info('page has already started finishing, breaking preprocessors chain')
+            raise gen.Return(False)
 
         raise gen.Return(True)
 
