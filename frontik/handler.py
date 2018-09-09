@@ -190,7 +190,7 @@ class PageHandler(RequestHandler):
         preprocessors = _unwrap_preprocessors(self.preprocessors) + _get_preprocessors(page_handler_method.__func__)
         preprocessors_finished = yield self._run_preprocessors(preprocessors, self)
 
-        if not preprocessors_finished or self._finished:
+        if not preprocessors_finished:
             self.log.info('page has already started finishing, skipping page method')
         else:
             yield gen.coroutine(page_handler_method)()
