@@ -1,6 +1,8 @@
 import json
 import unittest
 
+from tornado.escape import to_unicode
+
 from .instances import frontik_test_app
 
 
@@ -52,7 +54,7 @@ class TestPreprocessors(unittest.TestCase):
     def test_preprocessors_raise_custom_error(self):
         response = frontik_test_app.get_page('preprocessors/aborted?raise_custom_error=true')
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(json.loads(response.content), {'custom_error': True, 'postprocessor': True})
+        self.assertEqual(json.loads(to_unicode(response.content)), {'custom_error': True, 'postprocessor': True})
 
     def test_preprocessors_finish(self):
         response = frontik_test_app.get_page_text('preprocessors/aborted?finish=true')
@@ -65,7 +67,7 @@ class TestPreprocessors(unittest.TestCase):
 
     def test_finish_in_nonblocking_group_preprocessor(self):
         response = frontik_test_app.get_page('preprocessors/aborted_nonblocking_group?finish=true')
-        self.assertEqual(response.content, 'DONE_IN_PP')
+        self.assertEqual(to_unicode(response.content), 'DONE_IN_PP')
         self.assertEqual(response.status_code, 400)
 
     def test_abort_finish_in_nonblocking_group_preprocessor(self):
