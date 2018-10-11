@@ -144,4 +144,4 @@ if has_raven:
 
 else:
     AsyncSentryClient = None
-    SentryHandler = None
+    SentryLogger = None
