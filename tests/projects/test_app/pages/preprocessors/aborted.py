@@ -1,4 +1,6 @@
-from frontik.handler import HTTPError, PageHandler
+from tornado.web import HTTPError
+
+from frontik.handler import HTTPErrorWithPostprocessors, PageHandler
 from frontik.preprocessors import preprocessor
 
 
@@ -18,7 +20,8 @@ def pp(handler):
     if handler.get_argument('raise_error', 'false') != 'false':
         raise HTTPError(400)
     elif handler.get_argument('raise_custom_error', 'false') != 'false':
-        raise HTTPError(400, json={'custom_error': True})
+        handler.json.replace({'custom_error': True})
+        raise HTTPErrorWithPostprocessors(400)
     elif handler.get_argument('abort_page', 'false') != 'false':
         handler.abort_page(wait_finish_group=False)
     elif handler.get_argument('abort_page_nowait', 'false') != 'false':

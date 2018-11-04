@@ -12,10 +12,10 @@ class ContentPostprocessor:
 class Page(PageHandler):
     def get_page(self):
         if self.get_argument('raise_error', None) is not None:
-            self.add_postprocessor(Page._pp1)
+            self.add_postprocessor(self._pp_1)
 
         if self.get_argument('finish', None) is not None:
-            self.add_postprocessor(Page._pp2)
+            self.add_postprocessor(self._pp_2)
 
         if self.get_argument('header', None) is not None:
             self.add_template_postprocessor(Page._header_pp)
@@ -27,11 +27,13 @@ class Page(PageHandler):
         self.set_template('postprocess.html')
         self.json.put({'content': '%%content%%'})
 
-    def _early_pp_1(self):
+    @staticmethod
+    def _pp_1(handler):
         raise HTTPError(400)
 
-    def _early_pp_2(self):
-        self.finish('FINISH_IN_PP')
+    @staticmethod
+    def _pp_2(handler):
+        handler.finish('FINISH_IN_PP')
 
     def _header_pp(self, tpl):
         raise gen.Return(tpl.replace('%%header%%', 'HEADER'))

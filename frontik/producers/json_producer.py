@@ -10,7 +10,7 @@ from tornado.escape import to_unicode
 from tornado.options import options
 
 import frontik.json_builder
-from frontik.util import get_abs_path, get_cookie_or_url_param_value, copy_future_exception
+from frontik.util import get_abs_path, get_cookie_or_url_param_value
 from frontik.producers import ProducerFactory
 
 
@@ -88,8 +88,8 @@ class JsonProducer:
             while True:
                 try:
                     next_statement_render_result = next(template_stream, None)
-                except Exception:
-                    render_future.set_exc_info(sys.exc_info())
+                except Exception as e:
+                    render_future.set_exception(e)
                     return
 
                 if next_statement_render_result is None:
@@ -139,7 +139,7 @@ class JsonProducer:
                 elif isinstance(exception, jinja2.TemplateError):
                     self.log.error('%s error\n\t%s', exception.__class__.__name__, to_unicode(exception.message))
 
-                copy_future_exception(future, result_future)
+                result_future.set_exception(future.exception())
                 return
 
             start_time, result = future.result()

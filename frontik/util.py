@@ -171,13 +171,6 @@ def reverse_regex_named_groups(pattern, *args, **kwargs):
     return result.replace('^', '').replace('$', '')
 
 
-def copy_future_exception(a, b):
-    if hasattr(a, 'exc_info') and a.exc_info() is not None:
-        b.set_exc_info(a.exc_info())
-    elif a.exception() is not None:
-        b.set_exception(a.exception())
-
-
 def get_abs_path(root_path, relative_path):
     if relative_path is None or os.path.isabs(relative_path):
         return relative_path

@@ -11,7 +11,7 @@ import frontik.doc
 import frontik.util
 from frontik import file_cache
 from frontik.producers import ProducerFactory
-from frontik.util import get_abs_path, copy_future_exception
+from frontik.util import get_abs_path
 from frontik.xml_util import xml_from_file, xsl_from_file
 
 
@@ -98,7 +98,7 @@ class XmlProducer:
                 self.log.error('failed transformation with XSL %s', self.transform_filename)
                 self.log.error(get_xsl_log())
 
-                copy_future_exception(future, result_future)
+                result_future.set_exception(future.exception())
                 return
 
             start_time, xml_result, xslt_profile = future.result()

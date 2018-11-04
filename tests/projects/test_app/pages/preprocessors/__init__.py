@@ -2,7 +2,6 @@ import time
 
 from tornado import gen
 from tornado.concurrent import Future
-from tornado.web import HTTPError
 
 from frontik.handler import PageHandler
 from frontik.preprocessors import preprocessor
