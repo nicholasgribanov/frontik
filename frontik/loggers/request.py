@@ -2,47 +2,64 @@ import logging
 import time
 from collections import namedtuple
 
+from tornado.options import options
+
 from frontik.request_context import RequestContext
 
-logger = None  # for smooth transition from LoggerAdapter instances to the global logger
-
 _logger = logging.getLogger('frontik.handler')
+_slow_stage_logger = logging.getLogger('frontik.slow_stage')
 
 
 class RequestLogger(logging.LoggerAdapter):
 
-    Stage = namedtuple('Stage', ('name', 'delta', 'start_delta'))
+    Stage = namedtuple('Stage', ('name', 'start_time', 'end_time'))
 
     def __init__(self, request):
-        self._page_handler_name = None
         self._last_stage_time = self._start_time = request._start_time
-        self.stages = []
+
+        self.named_stages = {}
+        self.page_stages = []
 
         super(RequestLogger, self).__init__(_logger, {})
 
-        # backcompatibility with logger
-        self.warn = self.warning
-
-    def stage_tag(self, stage_name):
+    def log_page_stage(self, stage_name):
         stage_end_time = time.time()
-        stage_start_time = self._last_stage_time
+        stage = RequestLogger.Stage(stage_name, self._last_stage_time, stage_end_time)
+
+        self.page_stages.append(stage)
+
+        if self.isEnabledFor(logging.DEBUG):
+            self.debug(
+                'stage "%s" completed in %.2fms', stage.name, (stage_end_time - self._last_stage_time) * 1000,
+                extra={'_stage': stage}
+            )
+
         self._last_stage_time = stage_end_time
 
-        delta = (stage_end_time - stage_start_time) * 1000
-        start_delta = (stage_start_time - self._start_time) * 1000
-        stage = RequestLogger.Stage(stage_name, delta, start_delta)
+    def start_stage(self, stage_name):
+        stage_start_time = time.time()
+        self.named_stages[stage_name] = RequestLogger.Stage(stage_name, stage_start_time, None)
 
-        self.stages.append(stage)
-        self.debug('stage "%s" completed in %.2fms', stage.name, stage.delta, extra={'_stage': stage})
+    def end_stage(self, stage_name):
+        if stage_name not in self.named_stages:
+            self.warning('unable to end stage %s — stage was not started', stage_name)
+            return
 
-    def get_current_total(self):
-        return sum(s.delta for s in self.stages)
+        stage_end_time = time.time()
+        stage = self.named_stages[stage_name]
+        stage.end_time = stage_end_time
 
-    def log_stages(self, status_code):
+        if options.slow_callback_threshold_ms is not None:
+            stage_delta = (stage_end_time - stage.start_time) * 1000
+            if stage_delta >= options.slow_callback_threshold_ms:
+                _slow_stage_logger.warning('slow stage %s took %s ms', stage_name, stage_delta)
+
+    def flush_page_stages(self, status_code):
         """Writes available stages, total value and status code"""
 
-        stages_str = ' '.join('{s.name}={s.delta:.2f}'.format(s=s) for s in self.stages)
-        total = sum(s.delta for s in self.stages)
+        stages_delta = [(s.name, (s.end_time - s.start_time) * 1000) for s in self.page_stages]
+        stages_str = ' '.join('{0}={1:.2f}'.format(*s) for s in stages_delta)
+        total = sum(s[1] for s in stages_delta)
 
         self.info(
             'timings for %(page)s : %(stages)s',

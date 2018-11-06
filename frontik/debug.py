@@ -300,6 +300,10 @@ class DebugBufferedHandler(BufferedHandler):
     FIELDS = ['created', 'filename', 'funcName', 'levelname', 'levelno', 'lineno', 'module', 'msecs',
               'name', 'pathname', 'process', 'processName', 'relativeCreated', 'threadName']
 
+    def __init__(self, request_start_time):
+        self.request_start_time = request_start_time
+        super().__init__()
+
     def produce_all(self):
         log_data = etree.Element('log')
 
@@ -354,10 +358,12 @@ class DebugBufferedHandler(BufferedHandler):
             entry.append(E.text(to_unicode(record._text)))
 
         if getattr(record, '_stage', None) is not None:
+            stage = record._stage
+
             entry.append(E.stage(
-                E.name(record._stage.name),
-                E.delta(_format_number(record._stage.delta)),
-                E.start_delta(_format_number(record._stage.start_delta))
+                E.name(stage.name),
+                E.delta(_format_number((stage.end_time - stage.start_time) * 1000)),
+                E.start_delta(_format_number((stage.end_time - self.request_start_time) * 1000))
             ))
 
         return entry
@@ -500,7 +506,7 @@ class DebugMode:
             self.pass_debug = 'nopass' not in self.mode_values or self.inherited
             self.profile_xslt = 'xslt' in self.mode_values
 
-            RequestContext.set('log_handler', DebugBufferedHandler())
+            RequestContext.set('log_handler', DebugBufferedHandler(handler.request._start_time))
 
             if self.pass_debug:
                 debug_log.debug('%s header will be passed to all requests', DEBUG_HEADER_NAME)

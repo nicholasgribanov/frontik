@@ -144,7 +144,7 @@ class JsonProducer:
 
             start_time, result = future.result()
 
-            self.log.stage_tag('tpl')
+            self.log.log_page_stage('tpl')
             self.log.info('applied template %s in %.2fms', self.template_filename, (time.time() - start_time) * 1000)
 
             result_future.set_result(result)

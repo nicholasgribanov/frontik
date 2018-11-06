@@ -111,7 +111,7 @@ class XmlProducer:
             if len(self.transform.error_log):
                 self.log.warning(get_xsl_log())
 
-            self.log.stage_tag('xsl')
+            self.log.log_page_stage('xsl')
             result_future.set_result(xml_result)
 
         def get_xsl_log():

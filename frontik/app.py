@@ -156,5 +156,5 @@ class FrontikApplication(Application):
     def log_request(self, handler):
         super(FrontikApplication, self).log_request(handler)
         if isinstance(getattr(handler, 'log', None), request.RequestLogger):
-            handler.log.stage_tag('flush')
-            handler.log.log_stages(handler.get_status())
+            handler.log.log_page_stage('flush')
+            handler.log.flush_page_stages(handler.get_status())

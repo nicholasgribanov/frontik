@@ -186,7 +186,7 @@ class PageHandler(RequestHandler):
     @gen.coroutine
     def _execute_page(self, page_handler_method):
         self._auto_finish = False
-        self.log.stage_tag('prepare')
+        self.log.log_page_stage('prepare')
 
         preprocessors = _unwrap_preprocessors(self.preprocessors) + _get_preprocessors(page_handler_method.__func__)
         preprocessors_finished = yield self._run_preprocessors(preprocessors)
@@ -259,7 +259,7 @@ class PageHandler(RequestHandler):
             return
 
         postprocessors_finished = yield self._run_postprocessors(self._postprocessors)
-        self.log.stage_tag('page')
+        self.log.log_page_stage('page')
 
         if not postprocessors_finished:
             self.log.info('page has already started finishing, skipping page producer')
@@ -280,8 +280,8 @@ class PageHandler(RequestHandler):
 
     def on_connection_close(self):
         self.finish_group.abort()
-        self.log.stage_tag('page')
-        self.log.log_stages(408)
+        self.log.log_page_stage('page')
+        self.log.flush_page_stages(408)
         self.cleanup()
 
     def register_exception_hook(self, exception_hook):
@@ -302,7 +302,7 @@ class PageHandler(RequestHandler):
         `finish` asynchronously.
         """
 
-        self.log.stage_tag('page')
+        self.log.log_page_stage('page')
 
         if self._headers_written:
             super(PageHandler, self).send_error(status_code, **kwargs)
@@ -369,7 +369,7 @@ class PageHandler(RequestHandler):
             self.active_limit.release()
 
     def finish(self, chunk=None):
-        self.log.stage_tag('postprocess')
+        self.log.log_page_stage('postprocess')
 
         if self._status_code in (204, 304) or (100 <= self._status_code < 200):
             chunk = None
