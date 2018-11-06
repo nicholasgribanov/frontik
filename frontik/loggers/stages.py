@@ -8,7 +8,7 @@ stages_logger = logging.getLogger('stages')
 
 
 class StagesLogger:
-    Stage = namedtuple('Stage', ('name', 'delta', 'start_delta'))
+    Stage = namedtuple('Stage', ('name', 'start_time', 'end_time'))
 
     def __init__(self, request, statsd_client):
         self._last_stage_time = self._start_time = request._start_time
@@ -17,28 +17,32 @@ class StagesLogger:
 
     def commit_stage(self, stage_name):
         stage_end_time = time.time()
-        stage_start_time = self._last_stage_time
-        self._last_stage_time = stage_end_time
-
-        delta = (stage_end_time - stage_start_time) * 1000
-        start_delta = (stage_start_time - self._start_time) * 1000
-        stage = StagesLogger.Stage(stage_name, delta, start_delta)
+        stage = StagesLogger.Stage(stage_name, self._last_stage_time, stage_end_time)
 
         self._stages.append(stage)
-        stages_logger.debug('stage "%s" completed in %.2fms', stage.name, stage.delta, extra={'_stage': stage})
+
+        if stages_logger.isEnabledFor(logging.DEBUG):
+            stages_logger.debug(
+                'stage "%s" completed in %.2fms', stage.name, (stage_end_time - self._last_stage_time) * 1000,
+                extra={'_stage': stage}
+            )
+
+        self._last_stage_time = stage_end_time
 
     def flush_stages(self, status_code):
         """Writes available stages, total value and status code"""
 
+        stages_delta = [(s.name, (s.end_time - s.start_time) * 1000) for s in self._stages]
+
         self._statsd_client.stack()
 
-        for s in self._stages:
-            self._statsd_client.time(f'handler.stages.{s.name}.time', int(s.delta))
+        for stage, delta in stages_delta:
+            self._statsd_client.time(f'handler.stages.{stage}.time', int(delta))
 
         self._statsd_client.flush()
 
-        stages_str = ' '.join('{s.name}={s.delta:.2f}'.format(s=s) for s in self._stages)
-        total = sum(s.delta for s in self._stages)
+        stages_str = ' '.join('{0}={1:.2f}'.format(*s) for s in stages_delta)
+        total = sum(s[1] for s in stages_delta)
 
         stages_logger.info(
             'timings for %(page)s : %(stages)s',
