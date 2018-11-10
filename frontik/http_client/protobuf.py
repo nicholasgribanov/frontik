@@ -9,7 +9,7 @@ Error = namedtuple('Error', 'error,code,reason')
 protobuf_logger = logging.getLogger('frontik.protobuf_client')
 
 
-class RpcController(object):
+class RpcController:
     def __init__(self):
         self.Reset()
 
@@ -35,7 +35,7 @@ class RpcController(object):
         return self.failed
 
 
-class RpcChannel(object):
+class RpcChannel:
     CONTENT_TYPE_HEADER = 'Content-Type'
     PROTOBUF_CONTENT_TYPE = 'application/x-protobuf'
 

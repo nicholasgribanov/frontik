@@ -72,7 +72,7 @@ if has_raven:
                 request_timeout=options.http_client_default_request_timeout_sec
             )
 
-    class SentryLogger(object):
+    class SentryLogger:
         def __init__(self, sentry_client, request):
             """
             :type request: tornado.httpserver.HTTPRequest

@@ -6,7 +6,7 @@ from tornado.web import HTTPError
 handler_limit_logger = logging.getLogger('frontik.handler_active_limit')
 
 
-class PageHandlerActiveLimit(object):
+class PageHandlerActiveLimit:
     working_handlers_count = 0
 
     def __init__(self, request):
