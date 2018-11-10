@@ -54,7 +54,7 @@ class TestPreprocessors(unittest.TestCase):
     def test_preprocessors_raise_custom_error(self):
         response = frontik_test_app.get_page('preprocessors/aborted?raise_custom_error=true')
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(json.loads(to_unicode(response.content)), {'custom_error': True, 'postprocessor': True})
+        self.assertEqual(json.loads(response.content), {'custom_error': True, 'postprocessor': True})
 
     def test_preprocessors_finish(self):
         response = frontik_test_app.get_page_text('preprocessors/aborted?finish=true')
