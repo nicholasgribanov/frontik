@@ -37,13 +37,13 @@ class TestPreprocessors(unittest.TestCase):
     def test_preprocessors_abort_page(self):
         response_json = frontik_test_app.get_page_json('preprocessors/aborted?abort_page=true')
         self.assertEqual(
-            response_json, {'run': ['before', 'pp'], 'postprocessor': True}
+            response_json, {'run': ['before', 'pp'], 'put_request_finished': True, 'postprocessor': True}
         )
 
     def test_preprocessors_abort_page_nowait(self):
         response_json = frontik_test_app.get_page_json('preprocessors/aborted?abort_page_nowait=true')
         self.assertEqual(
-            response_json, {'run': ['before', 'pp'], 'put_request_finished': True, 'postprocessor': True}
+            response_json, {'run': ['before', 'pp'], 'postprocessor': True}
         )
 
     def test_preprocessors_raise_error(self):
@@ -70,6 +70,6 @@ class TestPreprocessors(unittest.TestCase):
         self.assertEqual(to_unicode(response.content), 'DONE_IN_PP')
         self.assertEqual(response.status_code, 400)
 
-    def test_abort_finish_in_nonblocking_group_preprocessor(self):
+    def test_abort_in_nonblocking_group_preprocessor(self):
         response = frontik_test_app.get_page('preprocessors/aborted_nonblocking_group?abort=true')
         self.assertEqual(response.status_code, 400)

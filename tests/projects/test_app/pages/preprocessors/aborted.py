@@ -23,9 +23,9 @@ def pp(handler):
         handler.json.replace({'custom_error': True})
         raise HTTPErrorWithPostprocessors(400)
     elif handler.get_argument('abort_page', 'false') != 'false':
-        handler.abort_page(wait_finish_group=False)
-    elif handler.get_argument('abort_page_nowait', 'false') != 'false':
         handler.abort_page(wait_finish_group=True)
+    elif handler.get_argument('abort_page_nowait', 'false') != 'false':
+        handler.abort_page(wait_finish_group=False)
     elif handler.get_argument('redirect', 'false') != 'false':
         handler.redirect(handler.request.host + handler.request.path + '?redirected=true')
     elif handler.get_argument('finish', 'false') != 'false':
