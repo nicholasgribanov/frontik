@@ -55,6 +55,7 @@ setup(
         'frontik': ['debug/*.xsl'],
     },
     install_requires=install_requires,
+    scripts=['scripts/frontik'],
     test_suite='tests',
     tests_require=[
         'pytest <= 3.8.2',
