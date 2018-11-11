@@ -8,10 +8,6 @@ from tornado.concurrent import Future
 from tornado.escape import to_unicode, utf8
 
 
-def list_unique(l):
-    return list(set(l))
-
-
 def any_to_unicode(s):
     if isinstance(s, bytes):
         return to_unicode(s)
