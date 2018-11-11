@@ -1,7 +1,7 @@
 from lxml import etree
 from tornado.web import HTTPError
 
-from frontik.handler import PageHandler
+from frontik.handler import FinishWithPostprocessors, PageHandler
 
 
 class Page(PageHandler):
@@ -31,7 +31,7 @@ class Page(PageHandler):
             self.doc.put(etree.Element('ok'))
             self.set_xsl('simple.xsl')
 
-        self.finish_with_postprocessors()
+        raise FinishWithPostprocessors()
 
     def post_page(self):
         pass

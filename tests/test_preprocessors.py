@@ -34,14 +34,14 @@ class TestPreprocessors(unittest.TestCase):
             }
         )
 
-    def test_preprocessors_abort_page(self):
-        response_json = frontik_test_app.get_page_json('preprocessors/aborted?abort_page=true')
+    def test_preprocessors_abort(self):
+        response_json = frontik_test_app.get_page_json('preprocessors/aborted?abort_preprocessors=true')
         self.assertEqual(
             response_json, {'run': ['before', 'pp'], 'put_request_finished': True, 'postprocessor': True}
         )
 
-    def test_preprocessors_abort_page_nowait(self):
-        response_json = frontik_test_app.get_page_json('preprocessors/aborted?abort_page_nowait=true')
+    def test_preprocessors_abort_nowait(self):
+        response_json = frontik_test_app.get_page_json('preprocessors/aborted?abort_preprocessors_nowait=true')
         self.assertEqual(
             response_json, {'run': ['before', 'pp'], 'postprocessor': True}
         )

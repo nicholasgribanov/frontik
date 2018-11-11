@@ -5,7 +5,7 @@ import requests
 from .instances import frontik_test_app
 
 
-class TestMicroHandler(unittest.TestCase):
+class TestFailFast(unittest.TestCase):
     def test_simple(self):
         json = frontik_test_app.get_page_json('fail_fast')
 
@@ -40,7 +40,3 @@ class TestMicroHandler(unittest.TestCase):
     def test_future_fail(self):
         response = frontik_test_app.get_page('fail_fast/future?fail_future=true')
         self.assertEqual(response.status_code, 500)
-
-    def test_future_with_unknown_result_fail_fast(self):
-        response = frontik_test_app.get_page('fail_fast/future?fail_fast_future=true')
-        self.assertEqual(response.status_code, 200)

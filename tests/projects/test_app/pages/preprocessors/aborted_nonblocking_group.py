@@ -1,6 +1,6 @@
 from tornado import gen
 
-from frontik.handler import PageHandler
+from frontik.handler import FinishWithPostprocessors, PageHandler
 from frontik.preprocessors import preprocessor
 
 
@@ -18,13 +18,13 @@ def pp2(handler):
 
         elif handler.get_argument('abort', None):
             def _pp(_):
-                # Ensure that page method is scheduled before postprocessors triggered by abort_page
+                # Ensure that page method is scheduled before postprocessors
                 yield gen.sleep(0.1)
                 if handler.get_status() == 200:
                     handler.set_status(400)
 
             handler.add_postprocessor(_pp)
-            handler.abort_page()
+            raise FinishWithPostprocessors()
 
     handler.add_to_preprocessors_group(
         handler.post_url(handler.request.host, handler.request.uri + '&from=pp', callback=_cb)

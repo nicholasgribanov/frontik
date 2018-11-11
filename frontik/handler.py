@@ -30,6 +30,11 @@ def _fallback_status_code(status_code):
     return status_code if status_code in http.client.responses else http.client.SERVICE_UNAVAILABLE
 
 
+class FinishWithPostprocessors(Exception):
+    def __init__(self, wait_finish_group=False):
+        self.wait_finish_group = wait_finish_group
+
+
 class HTTPErrorWithPostprocessors(tornado.web.HTTPError):
     pass
 
@@ -54,7 +59,6 @@ class PageHandler(RequestHandler):
         super(PageHandler, self).__init__(application, request, **kwargs)
 
         self._debug_access = None
-        self._page_aborted = False
         self._template_postprocessors = []
         self._postprocessors = []
 
@@ -66,7 +70,7 @@ class PageHandler(RequestHandler):
     def prepare(self):
         self.active_limit = frontik.handler_active_limit.PageHandlerActiveLimit(self.request)
         self.debug_mode = DebugMode(self)
-        self.finish_group = AsyncGroup(self._finish_page_cb, name='finish')
+        self.finish_group = AsyncGroup(lambda: None, name='finish')
         self._handler_finished_notification = self.finish_group.add_notification()
 
         self.json_producer = self.application.json.get_producer(self)
@@ -185,17 +189,23 @@ class PageHandler(RequestHandler):
 
     @gen.coroutine
     def _execute_page(self, page_handler_method):
-        self._auto_finish = False
         self.log.log_page_stage('prepare')
 
         preprocessors = _unwrap_preprocessors(self.preprocessors) + _get_preprocessors(page_handler_method.__func__)
         preprocessors_finished = yield self._run_preprocessors(preprocessors)
 
         if not preprocessors_finished:
-            self.log.info('page has already started finishing, skipping page method')
-        else:
-            yield gen.coroutine(page_handler_method)()
-            self._handler_finished_notification()
+            self.log.info('page has already finished, skipping page method')
+            return
+
+        yield gen.coroutine(page_handler_method)()
+        self._handler_finished_notification()
+
+        yield self.finish_group.get_finish_future()
+
+        response_data = yield self._postprocess()
+        if response_data is not None:
+            self.write(response_data)
 
     def get_page(self):
         """ This method can be implemented in the subclass """
@@ -238,14 +248,6 @@ class PageHandler(RequestHandler):
     def finish_with_postprocessors(self):
         self.finish_group.finish()
 
-    def abort_page(self, wait_finish_group=True):
-        self._page_aborted = True
-        if wait_finish_group:
-            self._handler_finished_notification()
-        else:
-            self.finish_with_postprocessors()
-
-    def _finish_page_cb(self):
         def _cb(future):
             if future.result() is not None:
                 self.finish(future.result())
@@ -327,6 +329,16 @@ class PageHandler(RequestHandler):
             if not self._finished:
                 self.finish()
 
+    def _handle_request_exception(self, e):
+        if isinstance(e, FinishWithPostprocessors):
+            if e.wait_finish_group:
+                self._handler_finished_notification()
+                self.add_future(self.finish_group.get_finish_future(), lambda _: self.finish_with_postprocessors())
+            else:
+                self.finish_with_postprocessors()
+        else:
+            super(PageHandler, self)._handle_request_exception(e)
+
     def write_error(self, status_code=500, **kwargs):
         """
         `write_error` can call `finish` asynchronously if HTTPErrorWithPostprocessors is raised.
@@ -357,6 +369,7 @@ class PageHandler(RequestHandler):
                 return
             except Exception:
                 self.log.exception('Uncaught exception in handle_fail_fast')
+
         elif isinstance(exception, HTTPErrorWithPostprocessors):
             self.finish_with_postprocessors()
             return
@@ -388,15 +401,15 @@ class PageHandler(RequestHandler):
 
         for p in preprocessors:
             yield gen.coroutine(p)(self)
-            if self._finished or self._page_aborted:
-                self.log.info('page has already started finishing, breaking preprocessors chain')
+            if self._finished:
+                self.log.info('page has already finished, breaking preprocessors chain')
                 raise gen.Return(False)
 
         self.preprocessors_group.try_finish()
         yield self.preprocessors_group.get_finish_future()
 
-        if self._finished or self._page_aborted:
-            self.log.info('page has already started finishing, breaking preprocessors chain')
+        if self._finished:
+            self.log.info('page has already finished, breaking preprocessors chain')
             raise gen.Return(False)
 
         raise gen.Return(True)
