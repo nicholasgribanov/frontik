@@ -6,7 +6,7 @@ from frontik.handler import FinishWithPostprocessors, PageHandler
 
 class Page(PageHandler):
     def prepare(self):
-        super(Page, self).prepare()
+        super().prepare()
 
         def pp(handler):
             handler.add_header('X-Foo', 'Bar')

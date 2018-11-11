@@ -54,7 +54,7 @@ class Page(PageHandler):
     preprocessors = [pp0('pp01'), pp0('pp02')]
 
     def prepare(self):
-        super(Page, self).prepare()
+        super().prepare()
 
         self.run = []
         self.json.put({

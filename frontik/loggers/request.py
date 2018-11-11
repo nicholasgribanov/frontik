@@ -20,7 +20,7 @@ class RequestLogger(logging.LoggerAdapter):
         self.named_stages = {}
         self.page_stages = []
 
-        super(RequestLogger, self).__init__(_logger, {})
+        super().__init__(_logger, {})
 
     def log_page_stage(self, stage_name):
         stage_end_time = time.time()

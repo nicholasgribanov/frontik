@@ -41,7 +41,7 @@ def pp_after(handler):
 
 class Page(PageHandler):
     def prepare(self):
-        super(Page, self).prepare()
+        super().prepare()
 
         self.run = []
         self.json.put({
