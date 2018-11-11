@@ -12,7 +12,13 @@ _slow_stage_logger = logging.getLogger('frontik.slow_stage')
 
 class RequestLogger(logging.LoggerAdapter):
 
-    Stage = namedtuple('Stage', ('name', 'start_time', 'end_time'))
+    class Stage:
+        __slots__ = ('name', 'start_time', 'end_time')
+
+        def __init__(self, name, start_time, end_time):
+            self.name = name
+            self.start_time = start_time
+            self.end_time = end_time
 
     def __init__(self, request):
         self._last_stage_time = self._start_time = request._start_time
