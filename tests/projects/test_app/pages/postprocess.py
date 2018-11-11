@@ -6,7 +6,7 @@ from frontik.handler import PageHandler
 
 class ContentPostprocessor:
     def postprocessor(self, handler, tpl):
-        raise gen.Return(tpl.replace('%%content%%', 'CONTENT'))
+        return tpl.replace('%%content%%', 'CONTENT')
 
 
 class Page(PageHandler):
@@ -36,4 +36,4 @@ class Page(PageHandler):
         handler.finish('FINISH_IN_PP')
 
     def _header_pp(self, tpl):
-        raise gen.Return(tpl.replace('%%header%%', 'HEADER'))
+        return tpl.replace('%%header%%', 'HEADER')

@@ -278,7 +278,7 @@ class PageHandler(RequestHandler):
         produced_result = yield producer()
 
         postprocessed_result = yield self._run_postprocessors(self._template_postprocessors, produced_result)
-        raise gen.Return(postprocessed_result)
+        return postprocessed_result
 
     def on_connection_close(self):
         self.finish_group.abort()
@@ -403,16 +403,16 @@ class PageHandler(RequestHandler):
             yield gen.coroutine(p)(self)
             if self._finished:
                 self.log.info('page has already finished, breaking preprocessors chain')
-                raise gen.Return(False)
+                return False
 
         self.preprocessors_group.try_finish()
         yield self.preprocessors_group.get_finish_future()
 
         if self._finished:
             self.log.info('page has already finished, breaking preprocessors chain')
-            raise gen.Return(False)
+            return False
 
-        raise gen.Return(True)
+        return True
 
     @gen.coroutine
     def _run_postprocessors(self, postprocessors, *args):
@@ -425,9 +425,9 @@ class PageHandler(RequestHandler):
 
             if self._finished:
                 self.log.warning('page has already started finishing, breaking postprocessors chain')
-                raise gen.Return(False)
+                return False
 
-        raise gen.Return(pp_result if pp_result is not None else True)
+        return pp_result if pp_result is not None else True
 
     def add_template_postprocessor(self, postprocessor):
         self._template_postprocessors.append(postprocessor)
