@@ -425,10 +425,9 @@ class PageHandler(RequestHandler):
 
         return True
 
-    @gen.coroutine
-    def _run_template_postprocessors(self, postprocessors, rendered_template):
+    async def _run_template_postprocessors(self, postprocessors, rendered_template):
         for p in postprocessors:
-            rendered_template = yield gen.coroutine(p)(self, rendered_template)
+            rendered_template = await p(self, rendered_template)
 
             if self._finished:
                 self.log.warning('page has already started finishing, breaking postprocessors chain')

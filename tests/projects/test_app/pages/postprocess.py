@@ -1,11 +1,13 @@
-from tornado import gen
+import asyncio
+
 from tornado.web import HTTPError
 
 from frontik.handler import PageHandler
 
 
 class ContentPostprocessor:
-    def postprocessor(self, handler, tpl):
+    async def postprocessor(self, handler, tpl):
+        await asyncio.sleep(0)
         return tpl.replace('%%content%%', 'CONTENT')
 
 
@@ -35,5 +37,5 @@ class Page(PageHandler):
     def _pp_2(handler):
         handler.finish('FINISH_IN_PP')
 
-    def _header_pp(self, tpl):
+    async def _header_pp(self, tpl):
         return tpl.replace('%%header%%', 'HEADER')
