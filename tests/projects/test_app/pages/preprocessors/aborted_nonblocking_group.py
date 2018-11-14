@@ -1,4 +1,4 @@
-from tornado import gen
+import asyncio
 
 from frontik.handler import FinishWithPostprocessors, PageHandler
 from frontik.preprocessors import preprocessor
@@ -17,9 +17,9 @@ def pp2(handler):
             handler.finish('DONE_IN_PP')
 
         elif handler.get_argument('abort', None):
-            def _pp(_):
+            async def _pp(_):
                 # Ensure that page method is scheduled before postprocessors
-                yield gen.sleep(0.1)
+                await asyncio.sleep(0.1)
                 if handler.get_status() == 200:
                     handler.set_status(400)
 

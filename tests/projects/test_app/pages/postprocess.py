@@ -30,11 +30,12 @@ class Page(PageHandler):
         self.json.put({'content': '%%content%%'})
 
     @staticmethod
-    def _pp_1(handler):
+    async def _pp_1(handler):
+        await asyncio.sleep(0)
         raise HTTPError(400)
 
     @staticmethod
-    def _pp_2(handler):
+    async def _pp_2(handler):
         handler.finish('FINISH_IN_PP')
 
     async def _header_pp(self, tpl):
