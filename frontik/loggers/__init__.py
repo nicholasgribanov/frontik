@@ -6,7 +6,7 @@ from tornado.log import LogFormatter
 from tornado.options import options
 
 from frontik.loggers import sentry, statsd
-from frontik.request_context import RequestContext
+from frontik.request_context import context, RequestContext
 
 """Contains a list of all available third-party loggers, that can be used in the request handler.
 
@@ -26,9 +26,9 @@ ROOT_LOGGER = logging.root
 
 class ContextFilter(logging.Filter):
     def filter(self, record):
-        handler_name = RequestContext.get('handler_name')
-        request_id = RequestContext.get('request_id')
-        record.name = '.'.join(filter(None, [record.name, handler_name, request_id]))
+        handler_name = RequestContext.get('handler_name') or context.get().handler_name
+        request_id = RequestContext.get('request_id') or context.get().request_id
+        record.name = '.'.join(filter(None, (record.name, handler_name, request_id)))
         return True
 
 
@@ -46,8 +46,9 @@ class BufferedHandler(logging.Handler):
 
 class GlobalLogHandler(logging.Handler):
     def handle(self, record):
-        if RequestContext.get('log_handler'):
-            RequestContext.get('log_handler').handle(record)
+        log_handler = RequestContext.get('log_handler') or context.get().log_handler
+        if log_handler:
+            log_handler.handle(record)
 
 
 def bootstrap_app_loggers(app):

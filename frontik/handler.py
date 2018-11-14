@@ -20,7 +20,7 @@ from frontik.debug import DebugMode
 from frontik.http_client import FailFastError
 from frontik.loggers.request import RequestLogger
 from frontik.preprocessors import _get_preprocessors, _unwrap_preprocessors
-from frontik.request_context import RequestContext
+from frontik.request_context import context, RequestContext
 
 SLOW_CALLBACK_LOGGER = logging.getLogger('slow_callback')
 
@@ -45,7 +45,7 @@ class PageHandler(RequestHandler):
     def __init__(self, application, request, **kwargs):
         self._prepared = False
         self.name = self.__class__.__name__
-        self.request_id = request.request_id = RequestContext.get('request_id')
+        self.request_id = request.request_id = RequestContext.get('request_id') or context.get().request_id
         self.config = application.config
         self.log = RequestLogger(request)
         self.text = None
@@ -160,6 +160,7 @@ class PageHandler(RequestHandler):
 
     def _execute(self, transforms, *args, **kwargs):
         RequestContext.set('handler_name', repr(self))
+        context.get().handler_name = repr(self)
         with stack_context.ExceptionStackContext(self._stack_context_handle_exception):
             return super()._execute(transforms, *args, **kwargs)
 
@@ -443,8 +444,7 @@ class PageHandler(RequestHandler):
 
     # Producers
 
-    @gen.coroutine
-    def _generic_producer(self):
+    async def _generic_producer(self):
         self.log.debug('finishing plaintext')
 
         if self._headers.get('Content-Type') is None:

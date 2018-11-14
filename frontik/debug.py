@@ -24,7 +24,7 @@ from tornado.web import OutputTransform
 import frontik.util
 import frontik.xml_util
 from frontik.loggers import BufferedHandler
-from frontik.request_context import RequestContext
+from frontik.request_context import context, RequestContext
 
 debug_log = logging.getLogger('frontik.debug')
 
@@ -416,9 +416,12 @@ class DebugTransform(OutputTransform):
 
         start_time = time.time()
 
-        debug_log_data = RequestContext.get('log_handler').produce_all()
+        log_handler = RequestContext.get('log_handler') or context.get().log_handler
+        handler_name = RequestContext.get('handler_name') or context.get().handler_name
+
+        debug_log_data = log_handler.produce_all()
         debug_log_data.set('code', str(int(self.status_code)))
-        debug_log_data.set('handler-name', RequestContext.get('handler_name'))
+        debug_log_data.set('handler-name', handler_name)
         debug_log_data.set('started', _format_number(self.request._start_time))
         debug_log_data.set('request-id', str(self.request.request_id))
         debug_log_data.set('stages-total', _format_number((time.time() - self.request._start_time) * 1000))
@@ -506,7 +509,9 @@ class DebugMode:
             self.pass_debug = 'nopass' not in self.mode_values or self.inherited
             self.profile_xslt = 'xslt' in self.mode_values
 
-            RequestContext.set('log_handler', DebugBufferedHandler(handler.request._start_time))
+            debug_handler = DebugBufferedHandler(handler.request._start_time)
+            RequestContext.set('log_handler', debug_handler)
+            context.get().log_handler = debug_handler
 
             if self.pass_debug:
                 debug_log.debug('%s header will be passed to all requests', DEBUG_HEADER_NAME)

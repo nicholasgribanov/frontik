@@ -17,7 +17,7 @@ from frontik.debug import DebugTransform
 from frontik.handler import ErrorHandler
 from frontik.http_client import HttpClientFactory
 from frontik.loggers import bootstrap_app_loggers, request
-from frontik.request_context import RequestContext
+from frontik.request_context import context, Context, RequestContext
 from frontik.routing import FileMappingRouter, FrontikRouter
 from frontik.version import version
 
@@ -90,12 +90,19 @@ class FrontikApplication(Application):
         if request_id is None:
             request_id = FrontikApplication.next_request_id()
 
-        context = partial(RequestContext, {'request_id': request_id})
+        ctx = partial(RequestContext, {'request_id': request_id})
 
         def wrapped_in_context(func):
             def wrapper(*args, **kwargs):
-                with StackContext(context):
-                    return func(*args, **kwargs)
+                with StackContext(ctx):
+                    _context = Context()
+                    _context.request_id = request_id
+                    token = context.set(_context)
+
+                    try:
+                        return func(*args, **kwargs)
+                    finally:
+                        context.reset(token)
             return wrapper
 
         delegate = wrapped_in_context(super().find_handler)(request, **kwargs)

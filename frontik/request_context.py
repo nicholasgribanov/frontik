@@ -1,4 +1,17 @@
+import contextvars
 import threading
+
+
+class Context:
+    __slots__ = ('request_id', 'handler_name', 'log_handler')
+
+    def __init__(self):
+        self.request_id = None
+        self.handler_name = None
+        self.log_handler = None
+
+
+context = contextvars.ContextVar('context', default=Context())
 
 
 class RequestContext:

@@ -1,10 +1,9 @@
 import logging
 import time
-from collections import namedtuple
 
 from tornado.options import options
 
-from frontik.request_context import RequestContext
+from frontik.request_context import context, RequestContext
 
 _logger = logging.getLogger('frontik.handler')
 _slow_stage_logger = logging.getLogger('frontik.slow_stage')
@@ -70,7 +69,7 @@ class RequestLogger(logging.LoggerAdapter):
         self.info(
             'timings for %(page)s : %(stages)s',
             {
-                'page': RequestContext.get('handler_name'),
+                'page': RequestContext.get('handler_name') or context.get().handler_name,
                 'stages': '{0} total={1:.2f} code={2}'.format(stages_str, total, status_code)
             },
         )
