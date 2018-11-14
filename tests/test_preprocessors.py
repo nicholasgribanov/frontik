@@ -21,8 +21,8 @@ class TestPreprocessors(unittest.TestCase):
             }
         )
 
-    def test_preprocessors_group(self):
-        response_json = frontik_test_app.get_page_json('preprocessors_group')
+    def test_preprocessor_futures(self):
+        response_json = frontik_test_app.get_page_json('preprocessor_futures')
         self.assertEqual(
             response_json,
             {

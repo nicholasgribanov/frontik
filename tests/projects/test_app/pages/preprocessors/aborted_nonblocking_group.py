@@ -26,7 +26,7 @@ def pp2(handler):
             handler.add_postprocessor(_pp)
             raise FinishWithPostprocessors()
 
-    handler.add_to_preprocessors_group(
+    handler.add_preprocessor_future(
         handler.post_url(handler.request.host, handler.request.uri + '&from=pp', callback=_cb)
     )
 

@@ -392,12 +392,12 @@ class PageHandler(RequestHandler):
 
     # Preprocessors and postprocessors
 
-    def add_to_preprocessors_group(self, future):
-        return self.preprocessors_group.add_future(future)
+    def add_preprocessor_future(self, future):
+        return self.preprocessor_futures.append(future)
 
     @gen.coroutine
     def _run_preprocessors(self, preprocessors):
-        self.preprocessors_group = AsyncGroup(lambda: None, name='preprocessors')
+        self.preprocessor_futures = []
 
         for p in preprocessors:
             yield gen.coroutine(p)(self)
@@ -405,8 +405,7 @@ class PageHandler(RequestHandler):
                 self.log.info('page has already finished, breaking preprocessors chain')
                 return False
 
-        self.preprocessors_group.try_finish()
-        yield self.preprocessors_group.get_finish_future()
+        yield gen.multi(self.preprocessor_futures)
 
         if self._finished:
             self.log.info('page has already finished, breaking preprocessors chain')

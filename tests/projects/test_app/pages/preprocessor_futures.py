@@ -6,7 +6,7 @@ from frontik.handler import PageHandler
 from frontik.preprocessors import preprocessor
 
 
-def waiting_preprocessor(sleep_time_sec, preprocessor_name, add_to_preprocessors_group):
+def waiting_preprocessor(sleep_time_sec, preprocessor_name, add_preprocessor_future):
     @preprocessor
     def pp(handler):
         def _put_to_completed():
@@ -17,8 +17,8 @@ def waiting_preprocessor(sleep_time_sec, preprocessor_name, add_to_preprocessors
         wait_future = Future()
         handler.add_timeout(time.time() + sleep_time_sec, _put_to_completed)
 
-        if add_to_preprocessors_group:
-            handler.add_to_preprocessors_group(wait_future)
+        if add_preprocessor_future:
+            handler.add_preprocessor_future(wait_future)
 
     return pp
 
