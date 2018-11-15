@@ -1,3 +1,4 @@
+import asyncio
 import time
 
 from tornado.concurrent import Future
@@ -8,7 +9,7 @@ from frontik.preprocessors import preprocessor
 
 def waiting_preprocessor(sleep_time_sec, preprocessor_name, add_preprocessor_future):
     @preprocessor
-    def pp(handler):
+    async def pp(handler):
         def _put_to_completed():
             handler.completed_preprocessors = getattr(handler, 'completed_preprocessors', [])
             handler.completed_preprocessors.append(preprocessor_name)

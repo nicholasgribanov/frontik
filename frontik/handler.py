@@ -1,3 +1,4 @@
+import asyncio
 import http.client
 import logging
 from functools import wraps
@@ -393,19 +394,19 @@ class PageHandler(RequestHandler):
     # Preprocessors and postprocessors
 
     def add_preprocessor_future(self, future):
-        return self.preprocessor_futures.append(future)
+        self.preprocessor_futures.append(future)
+        return future
 
-    @gen.coroutine
-    def _run_preprocessors(self, preprocessors):
+    async def _run_preprocessors(self, preprocessors):
         self.preprocessor_futures = []
 
         for p in preprocessors:
-            yield gen.coroutine(p)(self)
+            await p(self)
             if self._finished:
                 self.log.info('page has already finished, breaking preprocessors chain')
                 return False
 
-        yield gen.multi(self.preprocessor_futures)
+        await asyncio.gather(*self.preprocessor_futures)
 
         if self._finished:
             self.log.info('page has already finished, breaking preprocessors chain')

@@ -1,20 +1,25 @@
 import asyncio
 
+from tornado.concurrent import Future
+
 from frontik.handler import FinishWithPostprocessors, PageHandler
 from frontik.preprocessors import preprocessor
 
 
 @preprocessor
-def pp1(handler):
+async def pp1(handler):
     handler.set_header('content-type', 'text/plain')
 
 
 @preprocessor
-def pp2(handler):
+async def pp2(handler):
+    future = Future()
+
     def _cb(*_):
         if handler.get_argument('finish', None):
             handler.set_status(400)
             handler.finish('DONE_IN_PP')
+            future.set_result(None)
 
         elif handler.get_argument('abort', None):
             async def _pp(_):
@@ -24,11 +29,10 @@ def pp2(handler):
                     handler.set_status(400)
 
             handler.add_postprocessor(_pp)
-            raise FinishWithPostprocessors()
+            future.set_exception(FinishWithPostprocessors())
 
-    handler.add_preprocessor_future(
-        handler.post_url(handler.request.host, handler.request.uri + '&from=pp', callback=_cb)
-    )
+    handler.add_preprocessor_future(future)
+    handler.post_url(handler.request.host, handler.request.uri + '&from=pp', callback=_cb)
 
 
 class Page(PageHandler):
