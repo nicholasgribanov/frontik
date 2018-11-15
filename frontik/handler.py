@@ -464,9 +464,6 @@ class PageHandler(RequestHandler):
     def modify_http_client_request(self, balanced_request):
         pass
 
-    def group(self, futures, callback=None, name=None):
-        return self._http_client.group(futures, callback, name)
-
     def get_url(self, host, uri, *, name=None, data=None, headers=None, follow_redirects=True,
                 connect_timeout=None, request_timeout=None, max_timeout_tries=None,
                 callback=None, add_to_finish_group=True, parse_response=True, parse_on_error=False, fail_fast=False):

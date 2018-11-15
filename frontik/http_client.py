@@ -16,7 +16,6 @@ from tornado.httpclient import AsyncHTTPClient, HTTPRequest, HTTPResponse, HTTPE
 from tornado.httputil import HTTPHeaders
 from tornado.options import options
 
-from frontik.futures import AsyncGroup
 from frontik.auth import DEBUG_AUTH_HEADER_NAME
 from frontik.debug import DEBUG_HEADER_NAME, response_from_debug
 from frontik.util import make_url, make_body, make_mfd
@@ -486,30 +485,6 @@ class HttpClient:
 
     def get_upstream(self, host):
         return self.upstreams.get(host, Upstream.get_single_host_upstream())
-
-    def group(self, futures, callback=None, name=None):
-        group_future = Future()
-        results_holder = {}
-
-        def group_callback():
-            if callable(callback):
-                callback(results_holder)
-            group_future.set_result(results_holder)
-
-        def future_callback(name, future):
-            results_holder[name] = future.result()
-
-        async_group = AsyncGroup(self.handler.finish_group.add(self.handler.check_finished(group_callback)), name=name)
-
-        for name, future in futures.items():
-            if future.done():
-                future_callback(name, future)
-            else:
-                self.handler.add_future(future, async_group.add(partial(future_callback, name)))
-
-        async_group.try_finish_async()
-
-        return group_future
 
     def get_url(self, host, uri, *, name=None, data=None, headers=None, follow_redirects=True,
                 connect_timeout=None, request_timeout=None, max_timeout_tries=None,
