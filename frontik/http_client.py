@@ -12,7 +12,6 @@ from lxml import etree
 from tornado.escape import to_unicode
 from tornado.ioloop import IOLoop
 from tornado.concurrent import Future
-from tornado.curl_httpclient import CurlAsyncHTTPClient
 from tornado.httpclient import AsyncHTTPClient, HTTPRequest, HTTPResponse, HTTPError
 from tornado.httputil import HTTPHeaders
 from tornado.options import options
@@ -562,7 +561,7 @@ class HttpClient:
                                          status=response.code)
 
             if self.handler.is_finished():
-                self.handler.log.warning('page was already finished, {} ignored'.format(callback))
+                http_client_logger.warning('page was already finished, {} ignored'.format(callback))
                 return
 
             result = self._parse_response(response, parse_response, parse_on_error)
@@ -584,7 +583,7 @@ class HttpClient:
 
         def prepare_request(balanced_request):
             if self.handler.is_finished():
-                self.handler.log.warning(
+                http_client_logger.warning(
                     'attempted to make http request to %s %s when page is finished, ignoring',
                     balanced_request.get_host(),
                     balanced_request.uri
@@ -618,17 +617,6 @@ class HttpClient:
             do_retry = balanced_request.check_retry(response)
 
             self._log_response(balanced_request, response, retries_count, do_retry, debug_extra)
-            self.statsd_client.stack()
-            self.statsd_client.count('http.client.requests', 1,
-                                     upstream=balanced_request.get_host(),
-                                     server=balanced_request.current_host,
-                                     datacenter=balanced_request.current_datacenter,
-                                     final=str(not do_retry),
-                                     status=response.code)
-            self.statsd_client.time('http.client.request.time', int(response.request_time * 1000),
-                                    datacenter=balanced_request.current_datacenter,
-                                    upstream=balanced_request.get_host())
-            self.statsd_client.flush()
 
             if do_retry:
                 request = prepare_request(balanced_request)
@@ -661,10 +649,9 @@ class HttpClient:
 
         request.headers['X-Request-Id'] = self.handler.request_id
 
-        if isinstance(self.http_client_impl, CurlAsyncHTTPClient):
-            request.prepare_curl_callback = partial(
-                self._prepare_curl_callback, next_callback=request.prepare_curl_callback
-            )
+        request.prepare_curl_callback = partial(
+            self._prepare_curl_callback, next_callback=request.prepare_curl_callback
+        )
 
         try:
             response = await self.http_client_impl.fetch(request)
@@ -699,7 +686,7 @@ class HttpClient:
                                     '_datacenter': balanced_request.current_datacenter,
                                     '_balanced_request': balanced_request})
         except Exception:
-            self.handler.log.exception('Cannot get response from debug')
+            http_client_logger.exception('Cannot get response from debug')
 
         return response, debug_extra
 
@@ -714,8 +701,24 @@ class HttpClient:
             time=response.request_time * 1000
         )
 
-        log_method = self.handler.log.warning if response.code >= 500 else self.handler.log.info
+        log_method = http_client_logger.warning if response.code >= 500 else http_client_logger.info
         log_method(log_message, extra=debug_extra)
+
+        self.statsd_client.stack()
+        self.statsd_client.count(
+            'http.client.requests', 1,
+            upstream=balanced_request.get_host(),
+            server=balanced_request.current_host,
+            datacenter=balanced_request.current_datacenter,
+            final='false' if do_retry else 'true',
+            status=response.code
+        )
+        self.statsd_client.time(
+            'http.client.request.time', int(response.request_time * 1000),
+            datacenter=balanced_request.current_datacenter,
+            upstream=balanced_request.get_host()
+        )
+        self.statsd_client.flush()
 
     def _parse_response(self, response, parse_response, parse_on_error):
         result = RequestResult()
