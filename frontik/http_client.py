@@ -1,6 +1,7 @@
 import json
 import re
 import time
+from asyncio import ensure_future
 from collections import namedtuple
 from functools import partial
 from random import shuffle, random
@@ -568,7 +569,10 @@ class HttpClient:
             result.request = balanced_request
 
             if callable(callback):
-                self.handler.warn_slow_callback(callback)(result.data, result.response)
+                try:
+                    self.handler.warn_slow_callback(callback)(result.data, result.response)
+                except Exception as e:
+                    self.handler._handle_request_exception(e)
 
             if fail_fast and (result.response.error or result.data_parse_error is not None):
                 raise FailFastError(result)
@@ -578,7 +582,31 @@ class HttpClient:
         if add_to_finish_group and not self.handler.is_finished():
             request_finished_callback = self.handler.finish_group.add(request_finished_callback)
 
-        def retry_callback(response=None):
+        def prepare_request(balanced_request):
+            if self.handler.is_finished():
+                self.handler.log.warning(
+                    'attempted to make http request to %s %s when page is finished, ignoring',
+                    balanced_request.get_host(),
+                    balanced_request.uri
+                )
+                request_finished_callback(None)
+                return None
+
+            request = balanced_request.make_request()
+
+            if not balanced_request.backend_available():
+                request_finished_callback(
+                    HTTPResponse(request, 502,
+                                 error=HTTPError(502, 'No backend available for ' + balanced_request.get_host()),
+                                 request_time=0)
+                )
+                return None
+
+            return request
+
+        def retry_callback(future):
+            response = future.result()
+
             if response is None:
                 request_finished_callback(None)
                 return
@@ -603,36 +631,23 @@ class HttpClient:
             self.statsd_client.flush()
 
             if do_retry:
-                self._fetch(balanced_request, retry_callback)
+                request = prepare_request(balanced_request)
+                if request is not None:
+                    IOLoop.current().add_future(ensure_future(self._fetch(request)), retry_callback)
+
                 return
 
             request_finished_callback(response)
 
         self.modify_http_request_hook(balanced_request)
-        self._fetch(balanced_request, retry_callback)
+
+        request = prepare_request(balanced_request)
+        if request is not None:
+            IOLoop.current().add_future(ensure_future(self._fetch(request)), retry_callback)
 
         return future
 
-    def _fetch(self, balanced_request, callback):
-        if self.handler.is_finished():
-            self.handler.log.warning(
-                'attempted to make http request to %s %s when page is finished, ignoring',
-                balanced_request.get_host(),
-                balanced_request.uri
-            )
-
-            callback(None)
-            return
-
-        request = balanced_request.make_request()
-
-        if not balanced_request.backend_available():
-            response = HTTPResponse(request, 502,
-                                    error=HTTPError(502, 'No backend available for ' + balanced_request.get_host()),
-                                    request_time=0)
-            IOLoop.current().add_callback(callback, response)
-            return
-
+    async def _fetch(self, request):
         if self.handler.debug_mode.pass_debug:
             request.headers[DEBUG_HEADER_NAME] = 'true'
 
@@ -651,7 +666,15 @@ class HttpClient:
                 self._prepare_curl_callback, next_callback=request.prepare_curl_callback
             )
 
-        self.http_client_impl.fetch(request, callback)
+        try:
+            response = await self.http_client_impl.fetch(request)
+        except Exception as e:
+            if isinstance(e, HTTPError) and e.response is not None:
+                response = e.response
+            else:
+                response = HTTPResponse(request, 599, error=e, request_time=time.time() - request.start_time)
+
+        return response
 
     def _prepare_curl_callback(self, curl, next_callback):
         curl.setopt(pycurl.NOSIGNAL, 1)

@@ -1,5 +1,6 @@
 import logging
 import socket
+import warnings
 from logging.handlers import SysLogHandler
 
 from tornado.log import LogFormatter
@@ -106,4 +107,5 @@ def bootstrap_core_logging():
     if not ROOT_LOGGER.handlers:
         ROOT_LOGGER.addHandler(logging.NullHandler())
 
+    warnings.simplefilter('default')
     logging.captureWarnings(True)
