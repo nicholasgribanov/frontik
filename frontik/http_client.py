@@ -547,6 +547,11 @@ class HttpClient:
                           fail_fast):
         future = Future()
 
+        if add_to_finish_group and not self.handler.is_finished():
+            finish_notification = self.handler.finish_group.add_notification()
+        else:
+            finish_notification = lambda: None
+
         def request_finished_callback(response):
             if response is None:
                 return
@@ -568,18 +573,14 @@ class HttpClient:
             result.request = balanced_request
 
             if callable(callback):
-                try:
-                    self.handler.warn_slow_callback(callback)(result.data, result.response)
-                except Exception as e:
-                    self.handler._handle_request_exception(e)
+                self.handler.warn_slow_callback(callback)(result.data, result.response)
 
             if fail_fast and (result.response.error or result.data_parse_error is not None):
                 raise FailFastError(result)
             else:
                 future.set_result(result)
 
-        if add_to_finish_group and not self.handler.is_finished():
-            request_finished_callback = self.handler.finish_group.add(request_finished_callback)
+            finish_notification()
 
         def prepare_request(balanced_request):
             if self.handler.is_finished():
