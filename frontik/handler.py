@@ -253,15 +253,14 @@ class PageHandler(RequestHandler):
             if future.result() is not None:
                 self.finish(future.result())
 
-        self.add_future(self._postprocess(), _cb)
+        self.add_future(asyncio.ensure_future(self._postprocess()), _cb)
 
-    @gen.coroutine
-    def _postprocess(self):
+    async def _postprocess(self):
         if self._finished:
             self.log.info('page has already started finishing, skipping postprocessors')
             return
 
-        postprocessors_finished = yield self._run_postprocessors(self._postprocessors)
+        postprocessors_finished = await self._run_postprocessors(self._postprocessors)
         self.log.log_page_stage('page')
 
         if not postprocessors_finished:
@@ -276,10 +275,10 @@ class PageHandler(RequestHandler):
             producer = self.xml_producer
 
         self.log.debug('using %s producer', producer)
-        produced_result = yield producer()
+        produced_result = await producer()
 
-        postprocessed_result = yield self._run_template_postprocessors(self._template_postprocessors, produced_result)
-        return postprocessed_result
+        render_result = await self._run_template_postprocessors(self._template_postprocessors, produced_result)
+        return render_result
 
     def on_connection_close(self):
         self.finish_group.abort()
