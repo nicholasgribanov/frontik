@@ -553,9 +553,6 @@ class HttpClient:
             finish_notification = lambda: None
 
         def request_finished_callback(response):
-            if response is None:
-                return
-
             if balanced_request.tried_hosts is not None:
                 self.statsd_client.count('http.client.retries', 1,
                                          upstream=balanced_request.get_host(),
@@ -589,7 +586,8 @@ class HttpClient:
                     balanced_request.get_host(),
                     balanced_request.uri
                 )
-                request_finished_callback(None)
+                future.cancel()
+                finish_notification()
                 return None
 
             request = balanced_request.make_request()
@@ -606,11 +604,6 @@ class HttpClient:
 
         def retry_callback(future):
             response = future.result()
-
-            if response is None:
-                request_finished_callback(None)
-                return
-
             request = balanced_request.pop_last_request()
             retries_count = balanced_request.get_retries_count()
 
