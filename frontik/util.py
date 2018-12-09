@@ -201,7 +201,9 @@ def raise_future_exception(future):
 
 
 def get_abs_path(root_path, relative_path):
-    if relative_path is None or os.path.isabs(relative_path):
+    if not relative_path:
+        return root_path
+    elif os.path.isabs(relative_path):
         return relative_path
 
     return os.path.normpath(os.path.join(root_path, relative_path))

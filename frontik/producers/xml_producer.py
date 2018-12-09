@@ -1,7 +1,9 @@
 import copy
+import os
 import time
 import weakref
 from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
 
 import tornado.ioloop
 from lxml import etree
@@ -9,7 +11,6 @@ from tornado.options import options
 
 import frontik.doc
 import frontik.util
-from frontik import file_cache
 from frontik.producers import ProducerFactory
 from frontik.util import get_abs_path, raise_future_exception
 from frontik.xml_util import xml_from_file, xsl_from_file
@@ -17,38 +18,35 @@ from frontik.xml_util import xml_from_file, xsl_from_file
 
 class XMLProducerFactory(ProducerFactory):
     def __init__(self, application):
-        self.xml_cache = file_cache.make_file_cache(
-            'XML', 'xml_root',
-            get_abs_path(application.app_root, options.xml_root),
-            xml_from_file,
-            options.xml_cache_limit,
-            options.xml_cache_step,
-            deepcopy=True
-        )
+        xml_root = get_abs_path(application.app_root, options.xml_root)
+        xsl_root = get_abs_path(application.app_root, options.xsl_root)
 
-        self.xsl_cache = file_cache.make_file_cache(
-            'XSL', 'xsl_root',
-            get_abs_path(application.app_root, options.xsl_root),
-            xsl_from_file,
-            options.xsl_cache_limit,
-            options.xsl_cache_step
-        )
+        @lru_cache(options.xml_cache_limit)
+        def xml_from_file_cached(file):
+            return xml_from_file(os.path.normpath(os.path.join(xml_root, file)))
+
+        @lru_cache(options.xsl_cache_limit)
+        def xsl_from_file_cached(file):
+            return xsl_from_file(os.path.normpath(os.path.join(xsl_root, file)))
+
+        self.xml_from_file_cached = xml_from_file_cached
+        self.xsl_from_file_cached = xsl_from_file_cached
 
         self.executor = ThreadPoolExecutor(options.xsl_executor_pool_size)
 
     def get_producer(self, handler):
-        return XmlProducer(handler, xml_cache=self.xml_cache, xsl_cache=self.xsl_cache, executor=self.executor)
+        return XmlProducer(handler, self.xml_from_file_cached, self.xsl_from_file_cached, self.executor)
 
 
 class XmlProducer(object):
-    def __init__(self, handler, xml_cache=None, xsl_cache=None, executor=None):
+    def __init__(self, handler, xml_from_file_cached, xsl_from_file_cached, executor):
         self.handler = weakref.proxy(handler)
         self.log = weakref.proxy(self.handler.log)
         self.executor = executor
         self.ioloop = tornado.ioloop.IOLoop.current()
 
-        self.xml_cache = xml_cache
-        self.xsl_cache = xsl_cache
+        self.xml_from_file_cached = xml_from_file_cached
+        self.xsl_from_file_cached = xsl_from_file_cached
 
         self.doc = frontik.doc.Doc()
         self.transform = None
@@ -66,7 +64,7 @@ class XmlProducer(object):
             return
 
         try:
-            self.transform = self.xsl_cache.load(self.transform_filename, self.log)
+            self.transform = self.xsl_from_file_cached(self.transform_filename)
         except etree.XMLSyntaxError:
             self.log.error('failed parsing XSL file %s (XML syntax)', self.transform_filename)
             raise
@@ -130,7 +128,7 @@ class XmlProducer(object):
         callback(self.doc.to_string())
 
     def xml_from_file(self, filename):
-        return self.xml_cache.load(filename, self.log)
+        return copy.deepcopy(self.xml_from_file_cached(filename))
 
     def __repr__(self):
         return '{}.{}'.format(__package__, self.__class__.__name__)
