@@ -54,7 +54,8 @@ setup(
         'https://github.com/hhru/tornado/archive/tornado5.zip',
     ],
     extras_require={
-        'sentry': ['raven']
+        'sentry': ['raven'],
+        'statsd': ['aiostatsd']
     },
     zip_safe=False
 )

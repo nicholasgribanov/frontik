@@ -615,7 +615,6 @@ class HttpClient(object):
             do_retry = balanced_request.check_retry(response)
 
             self._log_response(balanced_request, response, retries_count, do_retry, debug_extra)
-            self.statsd_client.stack()
             self.statsd_client.count('http.client.requests', 1,
                                      upstream=balanced_request.get_host(),
                                      server=balanced_request.current_host,
@@ -625,7 +624,6 @@ class HttpClient(object):
             self.statsd_client.time('http.client.request.time', int(response.request_time * 1000),
                                     datacenter=balanced_request.current_datacenter,
                                     upstream=balanced_request.get_host())
-            self.statsd_client.flush()
 
             if do_retry:
                 self._fetch(balanced_request, retry_callback)
