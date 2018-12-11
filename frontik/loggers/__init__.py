@@ -79,10 +79,7 @@ class JSONFormatter(logging.Formatter):
             'ts': timestamp
         }
 
-        custom_json = getattr(record, CUSTOM_JSON_EXTRA, None)
-        if custom_json:
-            json_message.update(custom_json)
-        else:
+        if message:
             json_message.update({
                 'lvl': record.levelname,
                 'logger': record.name,
@@ -92,6 +89,10 @@ class JSONFormatter(logging.Formatter):
 
             if stack_trace:
                 json_message['exception'] = stack_trace
+
+        custom_json = getattr(record, CUSTOM_JSON_EXTRA, None)
+        if custom_json:
+            json_message.update(custom_json)
 
         return json.dumps(json_message)
 

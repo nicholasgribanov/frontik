@@ -10,6 +10,7 @@ from tornado.options import options
 import frontik.doc
 import frontik.util
 from frontik import file_cache
+from frontik.loggers import CUSTOM_JSON_EXTRA
 from frontik.producers import ProducerFactory
 from frontik.util import get_abs_path, raise_future_exception
 from frontik.xml_util import xml_from_file, xsl_from_file
@@ -103,8 +104,17 @@ class XmlProducer(object):
                 return
 
             start_time, xml_result, xslt_profile = future.result()
+            xslt_duration = int((time.time() - start_time) * 1000)
 
-            self.log.info('applied XSL %s in %.2fms', self.transform_filename, (time.time() - start_time) * 1000)
+            self.log.info(
+                'applied XSL %s in %sms', self.transform_filename, xslt_duration,
+                extra={
+                    CUSTOM_JSON_EXTRA: {
+                        'xsl_file': self.transform_filename,
+                        'xslt_duration': xslt_duration
+                    }
+                }
+            )
 
             if xslt_profile is not None:
                 self.log.debug('XSLT profiling results', extra={'_xslt_profile': xslt_profile.getroot()})
