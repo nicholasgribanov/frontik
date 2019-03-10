@@ -3,7 +3,7 @@ import http.client
 import logging
 import time
 from asyncio.futures import Future
-from functools import partial, wraps
+from functools import wraps
 from typing import TYPE_CHECKING
 
 import tornado.curl_httpclient
@@ -511,30 +511,6 @@ class PageHandler(RequestHandler):
                 authorization = self.request.headers.get(header_name)
                 if authorization is not None:
                     balanced_request.headers[header_name] = authorization
-
-    def group(self, futures, callback=None, name=None):
-        group_future = Future()
-        results_holder = {}
-
-        def group_callback():
-            if callable(callback):
-                callback(results_holder)
-            group_future.set_result(results_holder)
-
-        def future_callback(name, future):
-            results_holder[name] = future.result()
-
-        async_group = AsyncGroup(self.finish_group.add(self.check_finished(group_callback)), name=name)
-
-        for name, future in futures.items():
-            if future.done():
-                future_callback(name, future)
-            else:
-                self.add_future(future, async_group.add(partial(future_callback, name)))
-
-        async_group.try_finish_async()
-
-        return group_future
 
     def get_url(self, host, uri, *, name=None, data=None, headers=None, follow_redirects=True,
                 connect_timeout=None, request_timeout=None, max_timeout_tries=None,
