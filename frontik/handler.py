@@ -616,6 +616,15 @@ class PageHandler(RequestHandler):
         if waited:
             self.finish_group.add_future(future)
 
+        def handle_exception(future):
+            if future.exception() and not (self.is_finished() or self.finish_group.is_finished()):
+                try:
+                    raise future.exception()
+                except Exception as e:
+                    self._handle_request_exception(e)
+
+        future.add_done_callback(handle_exception)
+
         return future
 
     # Integrations stubs
