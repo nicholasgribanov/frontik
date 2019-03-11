@@ -204,9 +204,7 @@ class PageHandler(RequestHandler):
         self._handler_finished_notification()
         yield self.finish_group.get_finish_future()
 
-        render_result = yield self._postprocess()
-        if render_result is not None:
-            self.write(render_result)
+        yield self._postprocess()
 
     def get_page(self):
         """ This method can be implemented in the subclass """
@@ -266,19 +264,14 @@ class PageHandler(RequestHandler):
         if not self.finish_group.get_finish_future().done():
             self.finish_group.abort()
 
-        def _cb(future):
-            if future.result() is not None:
-                self.finish(future.result())
+        asyncio.get_event_loop().create_task(self._postprocess())
 
-        self.add_future(self._postprocess(), _cb)
-
-    @gen.coroutine
-    def _postprocess(self):
+    async def _postprocess(self):
         if self._finished:
             self.log.info('page was already finished, skipping postprocessors')
             return
 
-        postprocessors_completed = yield self._run_postprocessors(self._postprocessors)
+        postprocessors_completed = await self._run_postprocessors(self._postprocessors)
         self.stages_logger.commit_stage('page')
 
         if not postprocessors_completed:
@@ -293,10 +286,11 @@ class PageHandler(RequestHandler):
             renderer = self.xml_producer
 
         self.log.debug('using %s renderer', renderer)
-        rendered_result = yield renderer()
+        rendered_result = await renderer()
 
-        postprocessed_result = yield self._run_template_postprocessors(self._render_postprocessors, rendered_result)
-        return postprocessed_result
+        postprocessed_result = await self._run_template_postprocessors(self._render_postprocessors, rendered_result)
+        if postprocessed_result is not None:
+            self.finish(postprocessed_result)
 
     def on_connection_close(self):
         super().on_connection_close()
