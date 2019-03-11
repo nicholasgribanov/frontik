@@ -3,6 +3,7 @@ import logging
 import os
 import socket
 import time
+import warnings
 from logging.handlers import SysLogHandler
 
 from tornado.log import LogFormatter
@@ -219,4 +220,5 @@ def bootstrap_core_logging():
     for logger_name in options.suppressed_loggers:
         logging.getLogger(logger_name).setLevel(logging.WARN)
 
+    warnings.simplefilter('default')
     logging.captureWarnings(True)
