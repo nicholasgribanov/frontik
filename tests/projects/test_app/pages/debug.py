@@ -21,7 +21,7 @@ class Page(handler.PageHandler):
         self.post_url(self.request.host, self.request.path)
 
         self.log.error('error: testing failing urls')
-        self.get_url('invalid_host', 'invalid_url')
+        self.get_url('invalid_host', 'invalid_url', request_timeout=0.5)
 
         self.log.info('info: testing responses')
         self.put_url(self.request.host, self.request.path + '?type=html')

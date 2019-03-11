@@ -615,13 +615,21 @@ class HttpClient:
             elif not future.done():
                 future.set_result(result)
 
-        def retry_callback(response):
-            if isinstance(response.error, Exception) and not isinstance(response.error, HTTPError):
-                future.set_exception(response.error)
+        def retry_callback(response_future):
+            exc = response_future.exception()
+            if exc is not None and isinstance(exc, Exception) and not isinstance(exc, HTTPError):
+                future.set_exception(exc)
                 return
 
             request = balanced_request.pop_last_request()
             retries_count = balanced_request.get_retries_count()
+
+            if isinstance(exc, HTTPError) and exc.response is not None:
+                response = exc.response
+            elif exc is not None:
+                response = HTTPResponse(request, 599, error=exc, request_time=time.time() - request.start_time)
+            else:
+                response = response_future.result()
 
             response, debug_extra = self._unwrap_debug(balanced_request, request, response, retries_count)
             do_retry = balanced_request.check_retry(response)
@@ -629,26 +637,31 @@ class HttpClient:
             self._log_response(balanced_request, response, retries_count, do_retry, debug_extra)
 
             if do_retry:
-                self._fetch(balanced_request, retry_callback)
-                return
-
-            request_finished_callback(response)
+                self._fetch(balanced_request, retry_callback, request_finished_callback)
+            else:
+                request_finished_callback(response)
 
         self.modify_http_request_hook(balanced_request)
-        self._fetch(balanced_request, retry_callback)
+        self._fetch(balanced_request, retry_callback, request_finished_callback)
 
         return future
 
-    def _fetch(self, balanced_request, callback):
+    def _fetch(self, balanced_request, retry_callback, request_finished_callback):
+        request = self._prepare_request(balanced_request, request_finished_callback)
+        if request is not None:
+            IOLoop.current().add_future(self.http_client_impl.fetch(request), retry_callback)
+
+    def _prepare_request(self, balanced_request, callback):
         request = balanced_request.make_request()
 
         if not balanced_request.backend_available():
             response = HTTPResponse(
-                request, 502, error=HTTPError(502, 'No backend available for ' + balanced_request.get_host()),
+                request, 502,
+                error=HTTPError(502, 'No backend available for ' + balanced_request.get_host()),
                 request_time=0
             )
             IOLoop.current().add_callback(callback, response)
-            return
+            return None
 
         request.headers['x-request-id'] = get_request_id()
 
@@ -657,7 +670,7 @@ class HttpClient:
                 self._prepare_curl_callback, next_callback=request.prepare_curl_callback
             )
 
-        self.http_client_impl.fetch(request, callback, raise_error=False)
+        return request
 
     def _prepare_curl_callback(self, curl, next_callback):
         curl.setopt(pycurl.NOSIGNAL, 1)
