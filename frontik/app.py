@@ -8,7 +8,6 @@ import pycurl
 import tornado
 from lxml import etree
 from tornado.options import options
-from tornado.stack_context import StackContext
 from tornado.web import Application, RequestHandler
 
 import frontik.producers.json_producer
@@ -97,15 +96,12 @@ class FrontikApplication(Application):
         if request_id is None:
             request_id = FrontikApplication.next_request_id()
 
-        context = partial(request_context.RequestContext, {'request': request, 'request_id': request_id})
-
         def wrapped_in_context(func):
             def wrapper(*args, **kwargs):
                 token = request_context.initialize(request, request_id)
 
                 try:
-                    with StackContext(context):
-                        return func(*args, **kwargs)
+                    return func(*args, **kwargs)
                 finally:
                     request_context.reset(token)
 
