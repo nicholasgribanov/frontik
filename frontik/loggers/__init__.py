@@ -171,7 +171,6 @@ def bootstrap_logger(logger_info, logger_level, use_json_formatter=True, formatt
             stderr_handler.setFormatter(formatter)
         else:
             stderr_handler.setFormatter(get_stderr_formatter())
-            stderr_handler.addFilter(_CONTEXT_FILTER)
 
         handlers.append(stderr_handler)
 
