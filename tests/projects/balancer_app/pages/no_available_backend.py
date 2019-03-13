@@ -6,7 +6,7 @@ from tests.projects.balancer_app.pages import check_all_requests_done
 
 
 class Page(handler.PageHandler):
-    def get_page(self):
+    async def get_page(self):
         server = get_server(self, 'normal')
         self.application.http_client_factory.register_upstream('no_available_backend', {}, [server])
         server.is_active = False
@@ -26,6 +26,6 @@ class Page(handler.PageHandler):
         self.post_url('no_available_backend', self.request.path, callback=async_group.add(callback_post))
         check_all_requests_done(self, 'no_available_backend')
 
-    def post_page(self):
+    async def post_page(self):
         self.add_header('Content-Type', media_types.TEXT_PLAIN)
         self.text = 'result'

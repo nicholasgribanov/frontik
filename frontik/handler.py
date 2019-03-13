@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING
 import tornado.curl_httpclient
 import tornado.httputil
 import tornado.web
-from tornado import gen, stack_context
 from tornado.ioloop import IOLoop
 from tornado.options import options
 from tornado.web import RequestHandler
@@ -67,6 +66,7 @@ class PageHandler(RequestHandler):
 
         super().__init__(application, request, **kwargs)
 
+        self._execute_coroutine = None
         self._preprocessor_futures = []
         self._exception_hooks = []
 
@@ -161,64 +161,70 @@ class PageHandler(RequestHandler):
     # Requests handling
 
     def _execute(self, transforms, *args, **kwargs):
+        self._auto_finish = False
         request_context.set_handler_name(repr(self))
-        with stack_context.ExceptionStackContext(self._stack_context_handle_exception):
-            return super()._execute(transforms, *args, **kwargs)
+        return super()._execute(transforms, *args, **kwargs)
 
-    @gen.coroutine
-    def get(self, *args, **kwargs):
-        yield self._execute_page(self.get_page)
+    async def get(self, *args, **kwargs):
+        self._execute_coroutine = self._execute_page(self.get_page)
+        asyncio.create_task(self._execute_coroutine)
 
-    @gen.coroutine
-    def post(self, *args, **kwargs):
-        yield self._execute_page(self.post_page)
+    async def post(self, *args, **kwargs):
+        self._execute_coroutine = self._execute_page(self.post_page)
+        asyncio.create_task(self._execute_coroutine)
 
-    @gen.coroutine
-    def head(self, *args, **kwargs):
-        yield self._execute_page(self.get_page)
+    async def head(self, *args, **kwargs):
+        self._execute_coroutine = self._execute_page(self.get_page)
+        asyncio.create_task(self._execute_coroutine)
 
-    @gen.coroutine
-    def delete(self, *args, **kwargs):
-        yield self._execute_page(self.delete_page)
+    async def delete(self, *args, **kwargs):
+        self._execute_coroutine = self._execute_page(self.delete_page)
+        asyncio.create_task(self._execute_coroutine)
 
-    @gen.coroutine
-    def put(self, *args, **kwargs):
-        yield self._execute_page(self.put_page)
+    async def put(self, *args, **kwargs):
+        self._execute_coroutine = self._execute_page(self.put_page)
+        asyncio.create_task(self._execute_coroutine)
 
     def options(self, *args, **kwargs):
         self.__return_405()
 
-    @gen.coroutine
-    def _execute_page(self, page_handler_method):
-        self.stages_logger.commit_stage('prepare')
+    async def _execute_page(self, page_handler_method):
+        try:
+            self.stages_logger.commit_stage('prepare')
 
-        preprocessors = _unwrap_preprocessors(self.preprocessors) + _get_preprocessors(page_handler_method.__func__)
-        preprocessors_completed = yield self._run_preprocessors(preprocessors)
+            preprocessors = _unwrap_preprocessors(self.preprocessors) + _get_preprocessors(page_handler_method.__func__)
+            preprocessors_completed = await self._run_preprocessors(preprocessors)
 
-        if not preprocessors_completed:
-            self.log.info('page was already finished, skipping page method')
-            return
+            if not preprocessors_completed:
+                self.log.info('page was already finished, skipping page method')
+                return
 
-        yield gen.coroutine(page_handler_method)()
+            await page_handler_method()
 
-        self._handler_finished_notification()
-        yield self.finish_group.get_finish_future()
+            self._handler_finished_notification()
+            await self.finish_group.get_finish_future()
 
-        yield self._postprocess()
+            await self._postprocess()
 
-    def get_page(self):
+        except Exception as e:
+            try:
+                self._handle_request_exception(e)
+            except Exception:
+                self.log.error('Exception in exception handler', exc_info=True)
+
+    async def get_page(self):
         """ This method can be implemented in the subclass """
         self.__return_405()
 
-    def post_page(self):
+    async def post_page(self):
         """ This method can be implemented in the subclass """
         self.__return_405()
 
-    def put_page(self):
+    async def put_page(self):
         """ This method can be implemented in the subclass """
         self.__return_405()
 
-    def delete_page(self):
+    async def delete_page(self):
         """ This method can be implemented in the subclass """
         self.__return_405()
 
@@ -247,6 +253,12 @@ class PageHandler(RequestHandler):
 
     # Finish page
 
+    def abort(self):
+        # self.finish_group.abort()
+
+        if self._execute_coroutine is not None:
+            self._execute_coroutine.close()
+
     def is_finished(self):
         return self._finished
 
@@ -261,10 +273,7 @@ class PageHandler(RequestHandler):
         return wrapper
 
     def finish_with_postprocessors(self):
-        if not self.finish_group.get_finish_future().done():
-            self.finish_group.abort()
-
-        asyncio.get_event_loop().create_task(self._postprocess())
+        asyncio.create_task(self._postprocess())
 
     async def _postprocess(self):
         if self._finished:
@@ -295,7 +304,7 @@ class PageHandler(RequestHandler):
     def on_connection_close(self):
         super().on_connection_close()
 
-        self.finish_group.abort()
+        self.abort()
         self.stages_logger.commit_stage('page')
         self.stages_logger.flush_stages(408)
         self.cleanup()
@@ -591,6 +600,7 @@ class PageHandler(RequestHandler):
                 try:
                     raise future.exception()
                 except Exception as e:
+                    self.abort()
                     self._handle_request_exception(e)
 
         future.add_done_callback(handle_exception)

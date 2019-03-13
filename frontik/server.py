@@ -1,3 +1,4 @@
+import asyncio
 import importlib
 import logging
 import os.path
@@ -9,7 +10,6 @@ from concurrent.futures import ThreadPoolExecutor
 import tornado.autoreload
 import tornado.httpserver
 import tornado.ioloop
-from tornado import gen
 from tornado.httputil import HTTPServerRequest
 from tornado.options import parse_command_line, parse_config_file
 
@@ -159,7 +159,7 @@ def main(config_file=None):
 
                         run_server(app)
 
-                    ioloop.add_future(gen.multi(init_futures), await_init)
+                    ioloop.add_future(asyncio.gather(*init_futures), await_init)
                 else:
                     run_server(app)
 

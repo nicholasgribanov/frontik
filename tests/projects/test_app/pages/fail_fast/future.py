@@ -1,3 +1,4 @@
+from tornado import gen
 from tornado.concurrent import Future
 from tornado.ioloop import IOLoop
 
@@ -5,12 +6,12 @@ from frontik.handler import PageHandler
 
 
 class Page(PageHandler):
-    def get_page(self):
+    async def get_page(self):
         fail_future = self.get_argument('fail_future', 'false') == 'true'
 
-        results = yield {
+        results = await gen.multi({
             'future': self.get_future('future_result', exception=fail_future)
-        }
+        })
 
         self.json.put(results)
 

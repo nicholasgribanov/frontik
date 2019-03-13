@@ -30,9 +30,9 @@ class Page(PageHandler):
     @waiting_preprocessor(0.1, "should_finish_first", False)
     @waiting_preprocessor(0.3, "should_finish_second", True)
     @waiting_preprocessor(0.9, "should_finish_after_page_finish", False)
-    def get_page(self):
+    async def get_page(self):
         assert hasattr(self, 'completed_preprocessors')
         self.json.put({'preprocessors': self.completed_preprocessors})
 
-    def post_page(self):
+    async def post_page(self):
         self.add_preprocessor_future(Future())

@@ -9,7 +9,7 @@ from tests.projects.balancer_app.pages import check_all_requests_done, check_all
 
 
 class Page(PageHandler):
-    def get_page(self):
+    async def get_page(self):
         self.application.http_client_factory.register_upstream('retry_connect', {},
                                                                [get_server(self, 'free'), get_server(self, 'normal')])
         self.text = ''
@@ -31,6 +31,6 @@ class Page(PageHandler):
 
         check_all_servers_occupied(self, 'retry_connect')
 
-    def post_page(self):
+    async def post_page(self):
         self.add_header('Content-Type', media_types.TEXT_PLAIN)
         self.text = 'result'

@@ -1,4 +1,5 @@
 from lxml import etree
+from tornado import gen
 
 from frontik.app import FrontikApplication
 from frontik.handler import PageHandler
@@ -7,16 +8,16 @@ from tests.projects.test_app.pages.handler import delete
 
 
 class AsyncHandler(PageHandler):
-    def get_page(self):
+    async def get_page(self):
         self.result = 0
 
         def accumulate(xml, response):
             self.result += int(xml.findtext('val'))
 
-        yield {
+        await gen.multi({
             'val1': self.get_url(self.config.serviceHost, '/val1/1', callback=accumulate),
             'val2': self.get_url(self.config.serviceHost, '/val2/2', callback=accumulate)
-        }
+        })
 
         res = etree.Element('result')
         res.text = str(self.result)
@@ -25,7 +26,7 @@ class AsyncHandler(PageHandler):
 
 
 class CheckConfigHandler(PageHandler):
-    def get_page(self):
+    async def get_page(self):
         self.text = self.config.config_param
 
 
