@@ -2,6 +2,7 @@ import socket
 import unittest
 from contextlib import closing
 
+from frontik.headers import X_REQUEST_ID
 from .instances import find_free_port, frontik_test_app
 
 
@@ -68,10 +69,10 @@ class Client:
         self.socket.connect(('127.0.0.1', port))
 
     def send_request(self, backend_port, request_id=None):
-        self.socket.send(b'GET /http_client/proxy_code?port=' + str(backend_port).encode() + b' HTTP/1.1\r\n')
-        self.socket.send(b'Host: 127.0.0.1:' + str(self.port).encode() + b'\r\n')
+        self.socket.send(b'GET /http_client/proxy_code?port=' + str(backend_port).encode('utf-8') + b' HTTP/1.1\r\n')
+        self.socket.send(b'Host: 127.0.0.1:' + str(self.port).encode('utf-8') + b'\r\n')
         if request_id:
-            self.socket.send(b'X-Request-Id: ' + request_id.encode() + b'\r\n')
+            self.socket.send(f'{X_REQUEST_ID}: {request_id}\r\n'.encode('utf-8'))
         self.socket.send(b'\r\n')
 
     def get_response(self):

@@ -25,6 +25,13 @@ def any_to_bytes(s):
     return utf8(str(s))
 
 
+def any_to_int(s):
+    try:
+        return int(s)
+    except Exception:
+        return None
+
+
 def make_qs(query_args):
     return urlencode([(k, v) for k, v in query_args.items() if v is not None], doseq=True)
 

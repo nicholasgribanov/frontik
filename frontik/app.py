@@ -1,4 +1,5 @@
 import importlib
+import logging
 import sys
 import time
 from functools import partial
@@ -15,10 +16,14 @@ import frontik.producers.xml_producer
 from frontik import integrations, media_types, request_context
 from frontik.debug import DebugTransform
 from frontik.handler import ErrorHandler
+from frontik.headers import REQUEST_TIMEOUT_MS, X_REQUEST_ID
 from frontik.http_client import HttpClientFactory
 from frontik.loggers import CUSTOM_JSON_EXTRA, JSON_REQUESTS_LOGGER
 from frontik.routing import FileMappingRouter, FrontikRouter
+from frontik.util import any_to_int
 from frontik.version import version as frontik_version
+
+app_logger = logging.getLogger('app')
 
 
 def get_frontik_and_apps_versions(application):
@@ -84,15 +89,24 @@ class FrontikApplication(Application):
         self.transforms.insert(0, partial(DebugTransform, self))
 
     def find_handler(self, request, **kwargs):
-        request_id = request.headers.get('X-Request-Id')
+        request_id = request.headers.get(X_REQUEST_ID)
         if request_id is None:
             request_id = FrontikApplication.next_request_id()
 
-        context = partial(request_context.RequestContext, {'request_id': request_id})
+        request_timeout_ms = request.headers.get(REQUEST_TIMEOUT_MS)
+        if request_timeout_ms:
+            request_timeout_ms = any_to_int(request_timeout_ms)
+            if not request_timeout_ms:
+                app_logger.error('failed to convert %s header to int: %s', REQUEST_TIMEOUT_MS, request_timeout_ms)
+
+        context = partial(
+            request_context.RequestContext, {'request_id': request_id, 'request_timeout_ms': request_timeout_ms}
+        )
 
         def wrapped_in_context(func):
             def wrapper(*args, **kwargs):
                 token = request_context.initialize(request_id)
+                request_context.set_request_timeout_ms(request_timeout_ms)
 
                 try:
                     with StackContext(context):

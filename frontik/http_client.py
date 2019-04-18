@@ -18,9 +18,11 @@ from tornado.httputil import HTTPHeaders
 from tornado.options import options
 
 from frontik import media_types
-from frontik.futures import AsyncGroup
 from frontik.auth import DEBUG_AUTH_HEADER_NAME
 from frontik.debug import DEBUG_HEADER_NAME, response_from_debug
+from frontik.futures import AsyncGroup
+from frontik.headers import REQUEST_TIMEOUT_MS, X_REQUEST_ID
+from frontik.request_context import get_global_request_timeout_ms
 from frontik.util import make_url, make_body, make_mfd
 
 
@@ -718,9 +720,10 @@ class HttpClient:
         request = balanced_request.make_request()
 
         if not balanced_request.backend_available():
-            response = HTTPResponse(request, 502,
-                                    error=HTTPError(502, 'No backend available for ' + balanced_request.get_host()),
-                                    request_time=0)
+            response = HTTPResponse(
+                request, 502, error=HTTPError(502, 'No backend available for ' + balanced_request.get_host()),
+                request_time=0
+            )
             IOLoop.current().add_callback(callback, response)
             return
 
@@ -730,12 +733,22 @@ class HttpClient:
             # debug_timestamp is added to avoid caching of debug responses
             request.url = make_url(request.url, debug_timestamp=int(time.time()))
 
-            for header_name in ('Authorization', DEBUG_AUTH_HEADER_NAME):
+            for header_name in ('authorization', DEBUG_AUTH_HEADER_NAME):
                 authorization = self.handler.request.headers.get(header_name)
                 if authorization is not None:
                     request.headers[header_name] = authorization
 
-        request.headers['X-Request-Id'] = self.handler.request_id
+        request.headers[X_REQUEST_ID] = self.handler.request_id
+        if request.request_timeout:
+            request_timeout_ms = int(request.request_timeout * 1000)
+            request.headers[REQUEST_TIMEOUT_MS] = str(request_timeout_ms)
+
+            global_request_timeout_ms = get_global_request_timeout_ms()
+            if global_request_timeout_ms and global_request_timeout_ms < request_timeout_ms:
+                http_client_logger.error(
+                    'request timeout is greater than global timeout: %s > %s, request: %s',
+                    request_timeout_ms, global_request_timeout_ms, request
+                )
 
         if isinstance(self.http_client_impl, CurlAsyncHTTPClient):
             request.prepare_curl_callback = partial(

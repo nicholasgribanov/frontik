@@ -16,8 +16,9 @@ import frontik.producers.json_producer
 import frontik.producers.xml_producer
 import frontik.util
 from frontik import media_types, request_context
-from frontik.futures import AbortAsyncGroup, AsyncGroup
 from frontik.debug import DebugMode
+from frontik.futures import AbortAsyncGroup, AsyncGroup
+from frontik.headers import X_REQUEST_ID
 from frontik.http_client import FailFastError, RequestResult
 from frontik.loggers.stages import StagesLogger
 from frontik.preprocessors import _get_preprocessors, _unwrap_preprocessors
@@ -99,7 +100,7 @@ class PageHandler(RequestHandler):
     def set_default_headers(self):
         self._headers = tornado.httputil.HTTPHeaders({
             'Server': f'Frontik/{frontik_version}',
-            'X-Request-Id': self.request_id,
+            X_REQUEST_ID: self.request_id,
         })
 
     def decode_argument(self, value, name=None):

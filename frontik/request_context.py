@@ -3,10 +3,11 @@ import threading
 
 
 class _Context:
-    __slots__ = ('request_id', 'handler_name', 'log_handler')
+    __slots__ = ('request_id', 'request_timeout_ms', 'handler_name', 'log_handler')
 
     def __init__(self, request_id):
         self.request_id = request_id
+        self.request_timeout_ms = None
         self.handler_name = None
         self.log_handler = None
 
@@ -24,6 +25,15 @@ def reset(token):
 
 def get_request_id():
     return RequestContext.get('request_id') or _context.get().request_id
+
+
+def get_global_request_timeout_ms():
+    return RequestContext.get('request_timeout_ms') or _context.get().request_timeout_ms
+
+
+def set_request_timeout_ms(request_timeout_ms):
+    RequestContext.set('request_timeout_ms', request_timeout_ms)
+    _context.get().request_timeout_ms = request_timeout_ms
 
 
 def get_handler_name():
