@@ -5,7 +5,7 @@ from lxml_asserts.testcase import LxmlTestCaseMixin
 from tornado.concurrent import Future
 
 from frontik.doc import Doc
-from frontik.http_client import DataParseError, RequestResult
+from frontik.http_client import DataParseError, ParseMode, RequestResult
 
 
 class TestDoc(unittest.TestCase, LxmlTestCaseMixin):
@@ -144,4 +144,4 @@ class TestDoc(unittest.TestCase, LxmlTestCaseMixin):
         class FakeRequest:
             name = 'name'
 
-        return RequestResult(FakeRequest(), None, False, False)
+        return RequestResult(FakeRequest(), None, ParseMode.NEVER)

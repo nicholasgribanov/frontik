@@ -4,6 +4,7 @@ import re
 import socket
 import time
 from asyncio import Future
+from enum import IntEnum
 from functools import partial
 from random import shuffle, random
 
@@ -515,6 +516,12 @@ class HttpClientFactory:
         http_client_logger.info('update %s upstream: %s', name, str(upstream))
 
 
+class ParseMode(IntEnum):
+    ALWAYS = 0
+    ON_SUCCESS = 1
+    NEVER = 2
+
+
 class HttpClient:
     def __init__(self, http_client_impl, debug_mode, modify_http_request_hook, upstreams,
                  statsd_client, kafka_producer):
@@ -530,14 +537,14 @@ class HttpClient:
 
     def get_url(self, host, uri, *, name=None, data=None, headers=None, follow_redirects=True,
                 connect_timeout=None, request_timeout=None, max_timeout_tries=None,
-                callback=None, parse_response=True, parse_on_error=False, fail_fast=False):
+                callback=None, parse_response=ParseMode.ON_SUCCESS, fail_fast=False):
 
         request = BalancedHttpRequest(
             host, self.get_upstream(host), uri, name, 'GET', data, headers, None, None,
             connect_timeout, request_timeout, max_timeout_tries, follow_redirects
         )
 
-        return self._fetch_with_retry(request, callback, parse_response, parse_on_error, fail_fast)
+        return self._fetch_with_retry(request, callback, parse_response, fail_fast)
 
     def head_url(self, host, uri, *, name=None, data=None, headers=None, follow_redirects=True,
                  connect_timeout=None, request_timeout=None, max_timeout_tries=None,
@@ -548,44 +555,44 @@ class HttpClient:
             connect_timeout, request_timeout, max_timeout_tries, follow_redirects
         )
 
-        return self._fetch_with_retry(request, callback, False, False, fail_fast)
+        return self._fetch_with_retry(request, callback, ParseMode.NEVER, fail_fast)
 
     def post_url(self, host, uri, *,
                  name=None, data='', headers=None, files=None, content_type=None, follow_redirects=True,
                  connect_timeout=None, request_timeout=None, max_timeout_tries=None, idempotent=False,
-                 callback=None, parse_response=True, parse_on_error=False, fail_fast=False):
+                 callback=None, parse_response=ParseMode.ON_SUCCESS, fail_fast=False):
 
         request = BalancedHttpRequest(
             host, self.get_upstream(host), uri, name, 'POST', data, headers, files, content_type,
             connect_timeout, request_timeout, max_timeout_tries, follow_redirects, idempotent
         )
 
-        return self._fetch_with_retry(request, callback, parse_response, parse_on_error, fail_fast)
+        return self._fetch_with_retry(request, callback, parse_response, fail_fast)
 
     def put_url(self, host, uri, *, name=None, data='', headers=None, content_type=None,
                 connect_timeout=None, request_timeout=None, max_timeout_tries=None,
-                callback=None, parse_response=True, parse_on_error=False, fail_fast=False):
+                callback=None, parse_response=ParseMode.ON_SUCCESS, fail_fast=False):
 
         request = BalancedHttpRequest(
             host, self.get_upstream(host), uri, name, 'PUT', data, headers, None, content_type,
             connect_timeout, request_timeout, max_timeout_tries
         )
 
-        return self._fetch_with_retry(request, callback, parse_response, parse_on_error, fail_fast)
+        return self._fetch_with_retry(request, callback, parse_response, fail_fast)
 
     def delete_url(self, host, uri, *, name=None, data=None, headers=None, content_type=None,
                    connect_timeout=None, request_timeout=None, max_timeout_tries=None,
-                   callback=None, parse_response=True, parse_on_error=False, fail_fast=False):
+                   callback=None, parse_response=ParseMode.ON_SUCCESS, fail_fast=False):
 
         request = BalancedHttpRequest(
             host, self.get_upstream(host), uri, name, 'DELETE', data, headers, None, content_type,
             connect_timeout, request_timeout, max_timeout_tries
         )
 
-        return self._fetch_with_retry(request, callback, parse_response, parse_on_error, fail_fast)
+        return self._fetch_with_retry(request, callback, parse_response, fail_fast)
 
-    def _fetch_with_retry(self, balanced_request, callback, parse_response, parse_on_error,
-                          fail_fast) -> 'Future[RequestResult]':
+    def _fetch_with_retry(self, balanced_request: BalancedHttpRequest, callback, parse_response: ParseMode,
+                          fail_fast: bool) -> 'Future[RequestResult]':
         future = Future()
 
         def request_finished_callback(response):
@@ -599,7 +606,7 @@ class HttpClient:
                     status=response.code
                 )
 
-            result = RequestResult(balanced_request, response, parse_response, parse_on_error)
+            result = RequestResult(balanced_request, response, parse_response)
 
             if callable(callback):
                 try:
@@ -758,16 +765,14 @@ class DataParseError:
 
 class RequestResult:
     __slots__ = (
-        'name', 'request', 'response', 'parse_on_error', 'parse_response', '_content_type', '_data', '_data_parse_error'
+        'name', 'request', 'response', 'parse_response', '_content_type', '_data', '_data_parse_error'
     )
 
-    def __init__(self, request: BalancedHttpRequest, response: HTTPResponse,
-                 parse_response: bool, parse_on_error: bool):
+    def __init__(self, request: BalancedHttpRequest, response: HTTPResponse, parse_response: ParseMode):
         self.name = request.name
         self.request = request
         self.response = response
         self.parse_response = parse_response
-        self.parse_on_error = parse_on_error
 
         self._content_type = None
         self._data = None
@@ -777,9 +782,9 @@ class RequestResult:
         if self._data is not None or self._data_parse_error is not None:
             return
 
-        if self.response.error and not self.parse_on_error:
+        if self.response.error and self.parse_response != ParseMode.ALWAYS:
             data_or_error = DataParseError(reason=str(self.response.error), code=self.response.code)
-        elif not self.parse_response or self.response.code == 204:
+        elif self.parse_response == ParseMode.NEVER or self.response.code == 204:
             data_or_error = self.response.body
             self._content_type = 'raw'
         else:

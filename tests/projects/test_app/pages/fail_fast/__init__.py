@@ -23,7 +23,7 @@ class Page(PageHandler):
             'get': self.get_url(self.request.host, self.request.path, data={'return_none': 'true'}, fail_fast=True),
             'post': self.post_url(self.request.host, self.request.path, data={'param': 'post'}),
             'put': self.put_url(
-                self.request.host, self.request.path + '?code=401', fail_fast=fail_fast, parse_on_error=True
+                self.request.host, self.request.path + '?code=401', fail_fast=fail_fast
             )
         })
 
@@ -56,6 +56,6 @@ class Page(PageHandler):
             })
 
     async def put_page(self):
-        # Testing parse_on_error=True
+        # Testing parse_on_error=ParseMode.ALWAYS
         self.json.put({'error': 'forbidden'})
         raise HTTPErrorWithPostprocessors(int(self.get_argument('code')))
