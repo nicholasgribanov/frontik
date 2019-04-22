@@ -1,4 +1,4 @@
-import lxml.etree as etree
+from lxml import etree
 
 from tornado.concurrent import Future
 

@@ -3,7 +3,7 @@ import unittest
 
 from tornado.concurrent import Future
 
-from frontik.json_builder import JsonBuilder
+from frontik.json_builder import FrontikJsonEncoder, JsonBuilder
 from frontik.http_client import DataParseError
 from .test_doc import TestDoc
 
@@ -74,31 +74,16 @@ class TestJsonBuilder(unittest.TestCase):
             def to_json(self):
                 return '1.2.3'
 
-        class JSONEncoder(json.JSONEncoder):
+        class JSONEncoder(FrontikJsonEncoder):
             def default(self, obj):
                 if hasattr(obj, 'to_json'):
                     return obj.to_json()
-                return json.JSONEncoder.default(self, obj)
+                return super().default(obj)
 
         j = JsonBuilder(json_encoder=JSONEncoder)
         j.put({'a': CustomValue()})
 
         self.assertEqual(j.to_string(), """{"a": "1.2.3"}""")
-
-    def test_multiple_items(self):
-        j = JsonBuilder()
-        j.put({'a': 'b'})
-        j.put({'c': 'd'})
-
-        self.assertEqual(j.to_dict(), {'a': 'b', 'c': 'd'})
-
-        j.put({'a': 'x'}, {'e': 'f'})
-
-        self.assertEqual(j.to_dict(), {'a': 'x', 'c': 'd', 'e': 'f'})
-
-        j.put(e='x')
-
-        self.assertEqual(j.to_dict(), {'a': 'x', 'c': 'd', 'e': 'x'})
 
     def test_future(self):
         j = JsonBuilder()
@@ -172,10 +157,10 @@ class TestJsonBuilder(unittest.TestCase):
 
     def test_nested_json_builder(self):
         j1 = JsonBuilder()
-        j1.put(k1='v1')
+        j1.put({'k1': 'v1'})
 
         j2 = JsonBuilder()
-        j2.put(k2='v2')
+        j2.put({'k2': 'v2'})
 
         j1.put(j2)
 

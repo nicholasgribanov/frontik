@@ -1,9 +1,10 @@
 import json
+from typing import Any, Type
 
 from tornado.concurrent import Future
 
 
-def _encode_value(v):
+def _encode_value(v: Any) -> Any:
     def _encode_iterable(l):
         return [_encode_value(v) for v in l]
 
@@ -44,19 +45,21 @@ class FrontikJsonEncoder(json.JSONEncoder):
 class JsonBuilder:
     __slots__ = ('_data', '_encoder', 'root_node')
 
-    def __init__(self, root_node=None, json_encoder=None):
+    def __init__(self, root_node: str = None, json_encoder: Type[FrontikJsonEncoder] = None):
         if root_node is not None and not isinstance(root_node, str):
             raise TypeError(f'Cannot set {root_node} as root node')
+
+        if json_encoder is not None and not issubclass(json_encoder, FrontikJsonEncoder):
+            raise TypeError('`json_encoder` must be an instance of FrontikJsonEncoder')
 
         self._data = []
         self._encoder = json_encoder
         self.root_node = root_node
 
-    def put(self, *args, **kwargs):
+    def put(self, chunk) -> 'JsonBuilder':
         """Append a chunk of data to JsonBuilder."""
-        self._data.extend(args)
-        if kwargs:
-            self._data.append(kwargs)
+        self._data.append(chunk)
+        return self
 
     def is_empty(self):
         return len(self._data) == 0
@@ -64,11 +67,12 @@ class JsonBuilder:
     def clear(self):
         self._data = []
 
-    def replace(self, *args, **kwargs):
+    def replace(self, chunk) -> 'JsonBuilder':
         self.clear()
-        self.put(*args, **kwargs)
+        self.put(chunk)
+        return self
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         """ Return plain dict from all data appended to JsonBuilder """
         return _encode_value(self._concat_chunks())
 
@@ -86,12 +90,8 @@ class JsonBuilder:
 
         return result
 
-    def to_string(self):
+    def to_string(self) -> str:
         if self._encoder is None:
             return json.dumps(self._concat_chunks(), cls=FrontikJsonEncoder, ensure_ascii=False)
 
-        if issubclass(self._encoder, FrontikJsonEncoder):
-            return json.dumps(self._concat_chunks(), cls=self._encoder, ensure_ascii=False)
-
-        # For backwards compatibility, remove when all encoders extend FrontikJsonEncoder
-        return json.dumps(self.to_dict(), cls=self._encoder, ensure_ascii=False)
+        return json.dumps(self._concat_chunks(), cls=self._encoder, ensure_ascii=False)
