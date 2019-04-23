@@ -121,7 +121,6 @@ class JsonProducer:
 
             start_time, result = render_result
 
-            self.handler.stages_logger.commit_stage('tpl')
             self.log.info('applied template %s in %.2fms', self.template_filename, (time.time() - start_time) * 1000)
 
             return result

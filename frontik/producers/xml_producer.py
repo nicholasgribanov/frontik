@@ -111,7 +111,6 @@ class XmlProducer:
             if len(self.transform.error_log):
                 self.log.warning(get_xsl_log())
 
-            self.handler.stages_logger.commit_stage('xsl')
             return xml_result
 
         except Exception as e:

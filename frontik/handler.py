@@ -23,7 +23,6 @@ from frontik.auth import DEBUG_AUTH_HEADER_NAME
 from frontik.futures import AbortAsyncGroup, AsyncGroup
 from frontik.debug import DEBUG_HEADER_NAME, DebugMode
 from frontik.http_client import FailFastError, HttpClient, ParseMode, RequestResult
-from frontik.loggers.stages import StagesLogger
 from frontik.preprocessors import _get_preprocessors, _unwrap_preprocessors
 from frontik.util import make_url
 from frontik.version import version as frontik_version
@@ -72,8 +71,6 @@ class PageHandler(RequestHandler):
 
         for integration in application.available_integrations:
             integration.initialize_handler(self)
-
-        self.stages_logger = StagesLogger(request, self.statsd_client)
 
         self._debug_access = None
         self._render_postprocessors = []
@@ -190,8 +187,6 @@ class PageHandler(RequestHandler):
 
     async def _execute_page(self, page_handler_method):
         try:
-            self.stages_logger.commit_stage('prepare')
-
             preprocessors = _unwrap_preprocessors(self.preprocessors) + _get_preprocessors(page_handler_method.__func__)
             preprocessors_completed = await self._run_preprocessors(preprocessors)
 
@@ -281,7 +276,6 @@ class PageHandler(RequestHandler):
             return
 
         postprocessors_completed = await self._run_postprocessors(self._postprocessors)
-        self.stages_logger.commit_stage('page')
 
         if not postprocessors_completed:
             self.log.info('page was already finished, skipping page producer')
@@ -305,13 +299,7 @@ class PageHandler(RequestHandler):
         super().on_connection_close()
 
         self.abort()
-        self.stages_logger.commit_stage('page')
-        self.stages_logger.flush_stages(408)
         self.cleanup()
-
-    def on_finish(self):
-        self.stages_logger.commit_stage('flush')
-        self.stages_logger.flush_stages(self.get_status())
 
     def register_exception_hook(self, exception_hook):
         """
@@ -371,8 +359,6 @@ class PageHandler(RequestHandler):
         `finish` asynchronously.
         """
 
-        self.stages_logger.commit_stage('page')
-
         if self._headers_written:
             super().send_error(status_code, **kwargs)
             return
@@ -419,8 +405,6 @@ class PageHandler(RequestHandler):
             self.active_limit.release()
 
     def finish(self, chunk=None):
-        self.stages_logger.commit_stage('postprocess')
-
         if self._status_code in (204, 304) or (100 <= self._status_code < 200):
             self._write_buffer = []
             chunk = None
