@@ -593,7 +593,7 @@ class HttpClient:
 
     def _fetch_with_retry(self, balanced_request: BalancedHttpRequest, callback, parse_response: ParseMode,
                           fail_fast: bool) -> 'Future[RequestResult]':
-        future = Future()
+        future = Future()  # type: 'Future[RequestResult]'
 
         def request_finished_callback(response):
             if balanced_request.tried_hosts is not None:

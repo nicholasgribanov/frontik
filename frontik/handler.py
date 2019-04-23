@@ -2,7 +2,7 @@ import asyncio
 import http.client
 import logging
 import time
-from asyncio.futures import Future
+from asyncio import Future
 from functools import wraps
 from typing import TYPE_CHECKING
 
@@ -28,7 +28,8 @@ from frontik.util import make_url
 from frontik.version import version as frontik_version
 
 if TYPE_CHECKING:
-    from typing import Optional
+    from types import MethodType
+    from typing import Any, Optional
 
     from aiokafka import AIOKafkaProducer
 
@@ -96,9 +97,9 @@ class PageHandler(RequestHandler):
 
         self._handler_finished_notification = self.finish_group.add_notification()
 
-        super().prepare()
+        return super().prepare()
 
-    def require_debug_access(self, login=None, passwd=None):
+    def require_debug_access(self, login: str = None, passwd: str = None) -> None:
         if self._debug_access is None:
             if options.debug:
                 debug_access = True
@@ -110,13 +111,13 @@ class PageHandler(RequestHandler):
 
             self._debug_access = debug_access
 
-    def set_default_headers(self):
+    def set_default_headers(self) -> None:
         self._headers = tornado.httputil.HTTPHeaders({
             'Server': f'Frontik/{frontik_version}',
             'X-Request-Id': self.request_id,
         })
 
-    def decode_argument(self, value, name=None):
+    def decode_argument(self, value: bytes, name: str = None):
         try:
             return super().decode_argument(value, name)
         except (UnicodeError, tornado.web.HTTPError):
@@ -162,30 +163,30 @@ class PageHandler(RequestHandler):
         request_context.set_handler_name(repr(self))
         return super()._execute(transforms, *args, **kwargs)
 
-    async def get(self, *args, **kwargs):
+    def get(self, *args, **kwargs):
         self._execute_coroutine = self._execute_page(self.get_page)
         asyncio.create_task(self._execute_coroutine)
 
-    async def post(self, *args, **kwargs):
+    def post(self, *args, **kwargs):
         self._execute_coroutine = self._execute_page(self.post_page)
         asyncio.create_task(self._execute_coroutine)
 
-    async def head(self, *args, **kwargs):
+    def head(self, *args, **kwargs):
         self._execute_coroutine = self._execute_page(self.get_page)
         asyncio.create_task(self._execute_coroutine)
 
-    async def delete(self, *args, **kwargs):
+    def delete(self, *args, **kwargs):
         self._execute_coroutine = self._execute_page(self.delete_page)
         asyncio.create_task(self._execute_coroutine)
 
-    async def put(self, *args, **kwargs):
+    def put(self, *args, **kwargs):
         self._execute_coroutine = self._execute_page(self.put_page)
         asyncio.create_task(self._execute_coroutine)
 
     def options(self, *args, **kwargs):
         self.__return_405()
 
-    async def _execute_page(self, page_handler_method):
+    async def _execute_page(self, page_handler_method: 'MethodType'):
         try:
             preprocessors = _unwrap_preprocessors(self.preprocessors) + _get_preprocessors(page_handler_method.__func__)
             preprocessors_completed = await self._run_preprocessors(preprocessors)
@@ -354,7 +355,7 @@ class PageHandler(RequestHandler):
         else:
             super()._handle_request_exception(e)
 
-    def send_error(self, status_code=500, **kwargs):
+    def send_error(self, status_code: int = 500, **kwargs: 'Any') -> None:
         """`send_error` is adapted to support `write_error` that can call
         `finish` asynchronously.
         """
@@ -383,7 +384,7 @@ class PageHandler(RequestHandler):
             if not self._finished:
                 self.finish()
 
-    def write_error(self, status_code=500, **kwargs):
+    def write_error(self, status_code: int = 500, **kwargs: 'Any') -> None:
         """
         `write_error` can call `finish` asynchronously if HTTPErrorWithPostprocessors is raised.
         """
@@ -398,7 +399,7 @@ class PageHandler(RequestHandler):
             return
 
         self.set_header('Content-Type', media_types.TEXT_HTML)
-        return super().write_error(status_code, **kwargs)
+        super().write_error(status_code, **kwargs)
 
     def cleanup(self):
         if hasattr(self, 'active_limit'):
@@ -414,7 +415,7 @@ class PageHandler(RequestHandler):
 
     # Preprocessors and postprocessors
 
-    def add_preprocessor_future(self, future):
+    def add_preprocessor_future(self, future: Future):
         if self._preprocessor_futures is None:
             raise Exception(
                 'preprocessors chain is already finished, calling add_preprocessor_future at this time is incorrect'
@@ -476,13 +477,13 @@ class PageHandler(RequestHandler):
 
         return self.text
 
-    def xml_from_file(self, filename):
+    def xml_from_file(self, filename: str):
         return self.xml_producer.xml_from_file(filename)
 
-    def set_xsl(self, filename):
+    def set_xsl(self, filename: str):
         return self.xml_producer.set_xsl(filename)
 
-    def set_template(self, filename):
+    def set_template(self, filename: str):
         return self.json_producer.set_template(filename)
 
     # HTTP client methods
@@ -499,7 +500,7 @@ class PageHandler(RequestHandler):
                 if authorization is not None:
                     balanced_request.headers[header_name] = authorization
 
-    def get_url(self, host, uri, *, name=None, data=None, headers=None, follow_redirects=True,
+    def get_url(self, host: str, uri: str, *, name: str = None, data=None, headers=None, follow_redirects=True,
                 connect_timeout=None, request_timeout=None, max_timeout_tries=None,
                 callback=None, waited=True, parse_response=ParseMode.ALWAYS, fail_fast=False):
 
@@ -511,7 +512,7 @@ class PageHandler(RequestHandler):
 
         return self._execute_http_client_method(host, uri, client_method, waited, callback)
 
-    def head_url(self, host, uri, *, name=None, data=None, headers=None, follow_redirects=True,
+    def head_url(self, host: str, uri: str, *, name: str = None, data=None, headers=None, follow_redirects=True,
                  connect_timeout=None, request_timeout=None, max_timeout_tries=None,
                  callback=None, waited=True, fail_fast=False):
 
@@ -523,8 +524,8 @@ class PageHandler(RequestHandler):
 
         return self._execute_http_client_method(host, uri, client_method, waited, callback)
 
-    def post_url(self, host, uri, *,
-                 name=None, data='', headers=None, files=None, content_type=None, follow_redirects=True,
+    def post_url(self, host: str, uri: str, *,
+                 name: str = None, data='', headers=None, files=None, content_type=None, follow_redirects=True,
                  connect_timeout=None, request_timeout=None, max_timeout_tries=None, idempotent=False,
                  callback=None, waited=True, parse_response=ParseMode.ALWAYS, fail_fast=False):
 
@@ -537,7 +538,7 @@ class PageHandler(RequestHandler):
 
         return self._execute_http_client_method(host, uri, client_method, waited, callback)
 
-    def put_url(self, host, uri, *, name=None, data='', headers=None, content_type=None,
+    def put_url(self, host: str, uri: str, *, name: str = None, data='', headers=None, content_type=None,
                 connect_timeout=None, request_timeout=None, max_timeout_tries=None,
                 callback=None, waited=True, parse_response=ParseMode.ALWAYS, fail_fast=False):
 
@@ -549,7 +550,7 @@ class PageHandler(RequestHandler):
 
         return self._execute_http_client_method(host, uri, client_method, waited, callback)
 
-    def delete_url(self, host, uri, *, name=None, data=None, headers=None, content_type=None,
+    def delete_url(self, host: str, uri: str, *, name: str = None, data=None, headers=None, content_type=None,
                    connect_timeout=None, request_timeout=None, max_timeout_tries=None,
                    callback=None, waited=True, parse_response=ParseMode.ALWAYS, fail_fast=False):
 

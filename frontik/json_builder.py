@@ -1,5 +1,5 @@
 import json
-from typing import Any, Type
+from typing import Any, List, Type
 
 from tornado.concurrent import Future
 
@@ -52,7 +52,7 @@ class JsonBuilder:
         if json_encoder is not None and not issubclass(json_encoder, FrontikJsonEncoder):
             raise TypeError('`json_encoder` must be an instance of FrontikJsonEncoder')
 
-        self._data = []
+        self._data = []  # type: List[Any]
         self._encoder = json_encoder
         self.root_node = root_node
 
@@ -61,7 +61,7 @@ class JsonBuilder:
         self._data.append(chunk)
         return self
 
-    def is_empty(self):
+    def is_empty(self) -> bool:
         return len(self._data) == 0
 
     def clear(self):
@@ -76,7 +76,7 @@ class JsonBuilder:
         """ Return plain dict from all data appended to JsonBuilder """
         return _encode_value(self._concat_chunks())
 
-    def _concat_chunks(self):
+    def _concat_chunks(self) -> dict:
         result = {}
         for chunk in self._data:
             if isinstance(chunk, Future) or hasattr(chunk, 'to_dict'):
