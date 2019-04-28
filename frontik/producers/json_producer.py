@@ -61,8 +61,8 @@ class JsonProducer:
     def get_jinja_context(self):
         if callable(self.jinja_context_provider):
             return self.jinja_context_provider(self.handler)
-        else:
-            return self.json.to_dict()
+
+        return self.json.to_dict()
 
     async def _render_template_stream_on_ioloop(self, batch_render_timeout_ms):
         template_render_start_time = time.time()

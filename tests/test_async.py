@@ -6,6 +6,7 @@ from frontik.futures import future_fold
 
 class MyException(Exception):
     def __init__(self, result_was=None):
+        super().__init__()
         self.result_was = result_was
 
 

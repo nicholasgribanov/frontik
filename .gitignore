@@ -14,12 +14,16 @@ dist/
 frontik.egg-info/
 .eggs/
 .pytest_cache/
+.mypy_cache/
+.scannerwork/
 
 *.log
 .coverage*
 !.coveragerc
 .tox/
 /tests/temp/
+coverage.xml
+pytest.xml
 
 # OS X junk
 .AppleDouble

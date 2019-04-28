@@ -124,8 +124,6 @@ class TestSyslog(unittest.TestCase):
             },
         ]
 
-        print(parsed_logs['custom_logger'])
-
         self.assert_text_logs_match(expected_custom_logs, parsed_logs['custom_logger'])
 
     def assert_json_logs_match(self, expected_logs, parsed_logs):
@@ -134,10 +132,12 @@ class TestSyslog(unittest.TestCase):
                 priority = actual_log['priority']
                 message = json.loads(actual_log['message'])
 
-                if (
-                    priority == expected_log['priority'] and
-                    all(re.match(v, str(message[k]), re.DOTALL) for k, v in expected_log['message'].items())
-                ):
+                priority_equals = (priority == expected_log['priority'])
+                message_keys_match = all(
+                    re.match(v, str(message[k]), re.DOTALL) for k, v in expected_log['message'].items()
+                )
+
+                if priority_equals and message_keys_match:
                     break
             else:
                 self.fail(f'Log message not found: {expected_log}')

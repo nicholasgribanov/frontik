@@ -1,0 +1,17 @@
+[MESSAGES CONTROL]
+disable=
+    argument-naming-style,
+    broad-except,
+    invalid-name,
+    missing-docstring,
+    too-few-public-methods,
+    too-many-arguments,
+    too-many-branches,
+    too-many-instance-attributes,
+    too-many-locals,
+
+[FORMAT]
+max-line-length=120
+
+[REPORTS]
+score = no

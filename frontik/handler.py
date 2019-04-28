@@ -30,6 +30,7 @@ def _fallback_status_code(status_code):
 
 class FinishWithPostprocessors(Exception):
     def __init__(self, wait_finish_group=False):
+        super().__init__()
         self.wait_finish_group = wait_finish_group
 
 
@@ -242,8 +243,9 @@ class PageHandler(RequestHandler):
         def wrapper(*args, **kwargs):
             if self._finished:
                 self.log.warning('page was already finished, %s ignored', callback)
-            else:
-                return callback(*args, **kwargs)
+                return None
+
+            return callback(*args, **kwargs)
 
         return wrapper
 
@@ -261,14 +263,14 @@ class PageHandler(RequestHandler):
     def _postprocess(self):
         if self._finished:
             self.log.info('page was already finished, skipping postprocessors')
-            return
+            return None
 
         postprocessors_completed = yield self._run_postprocessors(self._postprocessors)
         self.stages_logger.commit_stage('page')
 
         if not postprocessors_completed:
             self.log.info('page was already finished, skipping page producer')
-            return
+            return None
 
         if self.text is not None:
             renderer = self._generic_producer
@@ -318,33 +320,36 @@ class PageHandler(RequestHandler):
                 self.finish_with_postprocessors()
 
         elif isinstance(e, FailFastError):
-            response = e.failed_request.response
-            request = e.failed_request.request
-
-            if self.log.isEnabledFor(logging.WARNING):
-                _max_uri_length = 24
-
-                request_name = request.get_host() + request.uri[:_max_uri_length]
-                if len(request.uri) > _max_uri_length:
-                    request_name += '...'
-                if request.name:
-                    request_name = f'{request_name} ({request.name})'
-
-                self.log.warning('FailFastError: request %s failed with %s code', request_name, response.code)
-
-            try:
-                error_method_name = f'{self.request.method.lower()}_page_fail_fast'
-                method = getattr(self, error_method_name, None)
-                if callable(method):
-                    method(e.failed_request)
-                else:
-                    self.__return_error(e.failed_request.response.code)
-
-            except Exception as exc:
-                super()._handle_request_exception(exc)
+            self._handle_fail_fast_error(e)
 
         else:
             super()._handle_request_exception(e)
+
+    def _handle_fail_fast_error(self, e: FailFastError):
+        response = e.failed_request.response
+        request = e.failed_request.request
+
+        if self.log.isEnabledFor(logging.WARNING):
+            _max_uri_length = 24
+
+            request_name = request.get_host() + request.uri[:_max_uri_length]
+            if len(request.uri) > _max_uri_length:
+                request_name += '...'
+            if request.name:
+                request_name = f'{request_name} ({request.name})'
+
+            self.log.warning('FailFastError: request %s failed with %s code', request_name, response.code)
+
+        try:
+            error_method_name = f'{self.request.method.lower()}_page_fail_fast'
+            method = getattr(self, error_method_name, None)
+            if callable(method):
+                method(e.failed_request)
+            else:
+                self.__return_error(e.failed_request.response.code)
+
+        except Exception as exc:
+            super()._handle_request_exception(exc)
 
     def send_error(self, status_code=500, **kwargs):
         """`send_error` is adapted to support `write_error` that can call
@@ -392,7 +397,7 @@ class PageHandler(RequestHandler):
             return
 
         self.set_header('Content-Type', media_types.TEXT_HTML)
-        return super().write_error(status_code, **kwargs)
+        super().write_error(status_code, **kwargs)
 
     def cleanup(self):
         if hasattr(self, 'active_limit'):

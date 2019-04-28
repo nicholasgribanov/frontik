@@ -13,7 +13,7 @@ import frontik.util
 from frontik import file_cache, media_types
 from frontik.producers import ProducerFactory
 from frontik.util import get_abs_path
-from frontik.xml_util import xml_from_file, xsl_from_file
+from frontik.xml_util import format_xslt_error, xml_from_file, xsl_from_file
 
 
 class XMLProducerFactory(ProducerFactory):
@@ -92,10 +92,6 @@ class XmlProducer:
                                     profile_run=self.handler.debug_mode.profile_xslt)
             return start_time, str(result), result.xslt_profile
 
-        def get_xsl_log():
-            xsl_line = 'XSLT {0.level_name} in file "{0.filename}", line {0.line}, column {0.column}\n\t{0.message}'
-            return '\n'.join(map(xsl_line.format, self.transform.error_log))
-
         try:
             ctx = contextvars.copy_context()
             xslt_result = await IOLoop.current().run_in_executor(self.executor, lambda: ctx.run(job))
@@ -109,15 +105,17 @@ class XmlProducer:
             if xslt_profile is not None:
                 self.log.debug('XSLT profiling results', extra={'_xslt_profile': xslt_profile.getroot()})
 
-            if len(self.transform.error_log):
-                self.log.warning(get_xsl_log())
+            if self.transform.error_log:
+                self.log.warning(format_xslt_error(self.transform.error_log))
 
             self.handler.stages_logger.commit_stage('xsl')
             return xml_result
 
         except Exception as e:
             self.log.error('failed XSLT %s', self.transform_filename)
-            self.log.error(get_xsl_log())
+            if self.transform.error_log:
+                self.log.error(format_xslt_error(self.transform.error_log))
+
             raise e
 
     async def _finish_with_xml(self):

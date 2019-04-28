@@ -2,4 +2,4 @@
 rm .coverage -f
 coverage run setup.py test --with-coverage
 echo "\nWaiting for coverage to create files...\n" ; sleep 5
-coverage combine ; coverage report -m
+coverage combine ; coverage report -m ; coverage xml --omit=tests/*

@@ -16,7 +16,7 @@ class SentryIntegration(Integration):
     def initialize_app(self, app) -> Optional[Future]:
         if not options.sentry_dsn:
             integrations_logger.info('sentry integration is disabled: sentry_dsn option is not configured')
-            return
+            return None
 
         self.sentry_client = FrontikAsyncSentryClient(
             dsn=options.sentry_dsn, http_client=app.http_client_factory.tornado_http_client,

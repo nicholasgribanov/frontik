@@ -15,7 +15,7 @@ class TestHook(test):
 
     def run_tests(self):
         import pytest
-        sys.exit(pytest.main(['tests', '--tb', 'native']))
+        sys.exit(pytest.main(['tests', '--tb', 'native', '--junitxml', 'pytest.xml']))
 
 
 setup(
@@ -43,7 +43,7 @@ setup(
     ],
     test_suite='tests',
     tests_require=[
-        'pytest <= 3.8.2',
+        'pytest <= 4.4.1',
         'pycodestyle == 2.5.0',
         'requests <= 2.20.0',
         'lxml-asserts',

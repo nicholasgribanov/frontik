@@ -25,7 +25,7 @@ def xsl_from_file(filename, log):
     return result
 
 
-def dict_to_xml(dict_value, element_name):
+def dict_to_xml(dict_value: dict, element_name: str):
     element = etree.Element(element_name)
     if not isinstance(dict_value, dict):
         element.text = any_to_unicode(dict_value)
@@ -33,11 +33,16 @@ def dict_to_xml(dict_value, element_name):
 
     for k, v in dict_value.items():
         element.append(dict_to_xml(v, k))
+
     return element
 
 
-def xml_to_dict(xml):
+def xml_to_dict(xml: etree.Element):
     if len(xml) == 0:
         return xml.text if xml.text is not None else ''
 
     return {e.tag: xml_to_dict(e) for e in xml}
+
+
+def format_xslt_error(error_log):
+    return '\n'.join(f'XSLT {m.level_name} in {m.filename}:{m.line}:{m.column}\n\t{m.message}' for m in error_log)

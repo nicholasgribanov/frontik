@@ -3,7 +3,9 @@ import logging
 import os
 import socket
 import time
-from logging.handlers import SysLogHandler
+from logging import StreamHandler
+from logging.handlers import SysLogHandler, WatchedFileHandler
+from typing import List
 
 from tornado.log import LogFormatter
 from tornado.options import options
@@ -152,6 +154,21 @@ def bootstrap_logger(logger_info, logger_level, use_json_formatter=True, formatt
 
     handlers = []
 
+    handlers.extend(_bootstrap_file(logger_name, use_json_formatter, formatter))
+    handlers.extend(_bootstrap_stderr(formatter))
+    handlers.extend(_bootstrap_syslog(logger_name, use_json_formatter, formatter))
+
+    for handler in handlers:
+        handler.setLevel(logger_level)
+        logger.addHandler(handler)
+
+    logger.addHandler(GlobalLogHandler())
+    logger.propagate = False
+
+    return logger
+
+
+def _bootstrap_file(logger_name, use_json_formatter, formatter) -> List[WatchedFileHandler]:
     if options.log_dir:
         file_handler = logging.handlers.WatchedFileHandler(os.path.join(options.log_dir, f'{logger_name}.log'))
         if use_json_formatter:
@@ -162,18 +179,26 @@ def bootstrap_logger(logger_info, logger_level, use_json_formatter=True, formatt
             file_handler.setFormatter(get_text_formatter())
             file_handler.addFilter(_CONTEXT_FILTER)
 
-        handlers.append(file_handler)
+        return [file_handler]
 
+    return []
+
+
+def _bootstrap_stderr(formatter) -> List[StreamHandler]:
     if options.stderr_log:
-        stderr_handler = logging.StreamHandler()
+        stderr_handler = StreamHandler()
         if formatter is not None:
             stderr_handler.setFormatter(formatter)
         else:
             stderr_handler.setFormatter(get_stderr_formatter())
             stderr_handler.addFilter(_CONTEXT_FILTER)
 
-        handlers.append(stderr_handler)
+        return [stderr_handler]
 
+    return []
+
+
+def _bootstrap_syslog(logger_name, use_json_formatter, formatter) -> List[SysLogHandler]:
     if options.syslog:
         try:
             syslog_handler = SysLogHandler(
@@ -190,19 +215,12 @@ def bootstrap_logger(logger_info, logger_level, use_json_formatter=True, formatt
                 syslog_handler.setFormatter(get_text_formatter())
                 syslog_handler.addFilter(_CONTEXT_FILTER)
 
-            handlers.append(syslog_handler)
+            return [syslog_handler]
 
         except socket.error:
             logging.getLogger('frontik.logging').exception('cannot initialize syslog')
 
-    for handler in handlers:
-        handler.setLevel(logger_level)
-        logger.addHandler(handler)
-
-    logger.addHandler(GlobalLogHandler())
-    logger.propagate = False
-
-    return logger
+    return []
 
 
 def bootstrap_core_logging():

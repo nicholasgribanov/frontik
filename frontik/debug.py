@@ -6,6 +6,7 @@ import logging
 import os
 import pprint
 import re
+import sys
 import time
 import traceback
 from binascii import crc32
@@ -25,6 +26,7 @@ import frontik.util
 import frontik.xml_util
 from frontik import media_types, request_context
 from frontik.loggers import BufferedHandler
+from frontik.xml_util import format_xslt_error
 
 debug_log = logging.getLogger('frontik.debug')
 
@@ -369,8 +371,13 @@ DEBUG_XSL = os.path.join(os.path.dirname(__file__), 'debug/debug.xsl')
 
 class DebugTransform(OutputTransform):
     def __init__(self, application, request):
+        super().__init__(request)
+
         self.application = application
         self.request = request
+        self.status_code = None
+        self.headers = None
+        self.chunks = None
 
     def is_enabled(self):
         return getattr(self.request, '_debug_enabled', False)
@@ -462,20 +469,21 @@ class DebugTransform(OutputTransform):
             upstream.set('color', _string_to_color(upstream.get('name')))
 
         if not getattr(self.request, '_debug_inherited', False):
+            transform = None
+
             try:
                 transform = etree.XSLT(etree.parse(DEBUG_XSL))
                 log_document = utf8(str(transform(debug_log_data)))
             except Exception:
+                error_log = [f'XSLT debug file error: {sys.exc_info()}']
                 debug_log.exception('XSLT debug file error')
 
-                try:
-                    debug_log.error('XSL error log entries:\n' + '\n'.join(
-                        '{0.filename}:{0.line}:{0.column}\n\t{0.message}'.format(m) for m in transform.error_log
-                    ))
-                except Exception:
-                    pass
+                if transform is not None and transform.error_log:
+                    xslt_error = format_xslt_error(transform.error_log)
+                    debug_log.error(xslt_error)
+                    error_log.append(xslt_error)
 
-                log_document = etree.tostring(debug_log_data, encoding='UTF-8', xml_declaration=True)
+                log_document = utf8('<pre>' + '\n'.join(error_log) + '</pre>')
         else:
             log_document = etree.tostring(debug_log_data, encoding='UTF-8', xml_declaration=True)
 

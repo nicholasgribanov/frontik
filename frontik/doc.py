@@ -43,32 +43,33 @@ class Doc:
     def to_etree_element(self):
         res = self.root_node.to_etree_element() if isinstance(self.root_node, Doc) else self.root_node
 
-        def chunk_to_element(chunk):
-            if isinstance(chunk, list):
-                for chunk_i in chunk:
-                    for i in chunk_to_element(chunk_i):
-                        yield i
-
-            elif hasattr(chunk, 'to_etree_element'):
-                etree_element = chunk.to_etree_element()
-                if etree_element is not None:
-                    yield etree_element
-
-            elif isinstance(chunk, Future):
-                if chunk.done():
-                    for i in chunk_to_element(chunk.result()):
-                        yield i
-
-            elif isinstance(chunk, etree._Element):
-                yield chunk
-
-            elif chunk is not None:
-                raise ValueError(f'Unexpected value of type {type(chunk)} in doc')
-
-        for chunk_element in chunk_to_element(self.data):
+        for chunk_element in _chunk_to_element(self.data):
             res.append(chunk_element)
 
         return res
 
     def to_string(self):
         return etree.tostring(self.to_etree_element(), encoding='utf-8', xml_declaration=True)
+
+
+def _chunk_to_element(chunk):
+    if isinstance(chunk, list):
+        for chunk_i in chunk:
+            for i in _chunk_to_element(chunk_i):
+                yield i
+
+    elif hasattr(chunk, 'to_etree_element'):
+        etree_element = chunk.to_etree_element()
+        if etree_element is not None:
+            yield etree_element
+
+    elif isinstance(chunk, Future):
+        if chunk.done():
+            for i in _chunk_to_element(chunk.result()):
+                yield i
+
+    elif isinstance(chunk, etree._Element):
+        yield chunk
+
+    elif chunk is not None:
+        raise ValueError(f'Unexpected value of type {type(chunk)} in doc')

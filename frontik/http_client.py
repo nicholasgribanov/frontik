@@ -33,6 +33,7 @@ http_client_logger = logging.getLogger('http_client')
 
 class FailFastError(Exception):
     def __init__(self, failed_request: 'RequestResult'):
+        super().__init__()
         self.failed_request = failed_request
 
 
@@ -637,7 +638,7 @@ class HttpClient:
                 )
 
             if callback is not None and self.handler.is_finished():
-                http_client_logger.warning(f'page was already finished, {callback} ignored')
+                http_client_logger.warning('page was already finished, %s ignored', callback)
                 return
 
             result = RequestResult(balanced_request, response, parse_response, parse_on_error)

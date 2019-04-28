@@ -14,7 +14,7 @@ class TestXsl(unittest.TestCase):
         self.assertEqual(response.status_code, 500)
 
         html = frontik_test_app.get_page_text('xsl/apply_error?debug')
-        self.assertIn('XSLT ERROR in file', html)
+        self.assertIn('XSLT ERROR in ', html)
 
     def test_xsl_parse_error(self):
         response = frontik_test_app.get_page('xsl/parse_error')
