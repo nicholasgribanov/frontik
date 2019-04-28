@@ -14,13 +14,16 @@ class ContentPostprocessor:
 class Page(JinjaPageHandler):
     async def get_page(self):
         if self.get_argument('raise_error', None) is not None:
-            self.add_postprocessor(self._pp_1)
+            self.add_postprocessor(self._error_in_postprocessor)
 
         if self.get_argument('finish', None) is not None:
-            self.add_postprocessor(self._pp_2)
+            self.add_postprocessor(self._finish_in_postprocessor)
+
+        if self.get_argument('template_finish', None) is not None:
+            self.add_postprocessor(self._finish_in_template_postprocessor)
 
         if self.get_argument('header', None) is not None:
-            self.add_render_postprocessor(Page._header_pp)
+            self.add_render_postprocessor(Page._header_postprocessor)
 
         if self.get_argument('content', None) is not None:
             content_postprocessor = ContentPostprocessor()
@@ -30,12 +33,16 @@ class Page(JinjaPageHandler):
         self.json.put({'content': '%%content%%'})
 
     @staticmethod
-    async def _pp_1(handler):
+    async def _error_in_postprocessor(handler):
         raise HTTPError(400)
 
     @staticmethod
-    async def _pp_2(handler):
+    async def _finish_in_postprocessor(handler):
         handler.finish('FINISH_IN_PP')
 
-    async def _header_pp(self, tpl):
+    @staticmethod
+    async def _finish_in_template_postprocessor(handler):
+        handler.finish('FINISH_IN_TEMPLATE_PP')
+
+    async def _header_postprocessor(self, tpl):
         return tpl.replace('%%header%%', 'HEADER')

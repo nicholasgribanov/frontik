@@ -59,9 +59,9 @@ class FrontikTestInstance:
         self.port = find_free_port()
         self.popen = _run_command(self.command, self.port)
 
-        for i in range(10):
+        for _ in range(20):
             try:
-                time.sleep(0.2)
+                time.sleep(0.1)
                 response = self.get_page('status')
                 if response.status_code == 200:
                     return
@@ -118,7 +118,7 @@ class FrontikTestInstance:
 
 
 frontik_test_app = FrontikTestInstance(
-    './frontik-test --app=tests.projects.test_app --config=tests/projects/frontik_debug.cfg --log_dir=.'
+    './frontik-test --app=tests.projects.test_app --log_dir=.'
 )
 
 frontik_re_app = FrontikTestInstance(

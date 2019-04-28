@@ -23,3 +23,7 @@ def xsl_from_file(filename):
     result = etree.XSLT(etree.parse(filename, parser))
     xml_util_log.info('read xsl file %s in %.2fms', filename, (time.time() - start_time) * 1000)
     return result
+
+
+def format_xslt_error(error_log):
+    return '\n'.join(f'XSLT {m.level_name} in {m.filename}:{m.line}:{m.column}\n\t{m.message}' for m in error_log)

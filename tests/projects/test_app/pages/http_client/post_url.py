@@ -1,5 +1,7 @@
 import re
 
+from tornado.web import HTTPError
+
 from frontik.handler import JsonPageHandler
 from frontik.util import any_to_bytes, any_to_unicode
 
@@ -27,7 +29,6 @@ class Page(JsonPageHandler):
         self.json.put(self.post_url(self.request.host, self.request.path, data=FIELDS, files=FILES))
 
     async def post_page(self):
-        errors_count = 0
         body_parts = self.request.body.split(b'\r\n--')
 
         for part in body_parts:
@@ -35,25 +36,22 @@ class Page(JsonPageHandler):
             file_part = re.search(b'name="(?P<name>.+)"; filename="(?P<filename>.+)"\r\n'
                                   b'Content-Type: application/octet-stream\r\n\r\n(?P<value>.*)', part)
 
-            if field_part:
-                val = field_part.group('value')
-                name = any_to_unicode(field_part.group('name'))
+            actual_name = any_to_unicode(field_part.group('name'))
+            actual_val = field_part.group('value')
 
-                if isinstance(FIELDS[name], list) and all(val != any_to_bytes(x) for x in FIELDS[name]):
-                    errors_count += 1
-                elif not isinstance(FIELDS[name], list) and any_to_bytes(FIELDS[name]) != val:
-                    errors_count += 1
+            if field_part:
+                expected_val = FIELDS[actual_name]
+                is_list_field = isinstance(expected_val, list)
+
+                if is_list_field and any(actual_val != any_to_bytes(x) for x in expected_val):
+                    raise HTTPError(500)
+
+                if not is_list_field and any_to_bytes(expected_val) != actual_val:
+                    raise HTTPError(500)
 
             elif file_part:
-                val = file_part.group('value')
-                name = any_to_unicode(file_part.group('name'))
                 filename = file_part.group('filename')
 
-                for file in FILES[name]:
-                    if any_to_bytes(file['filename']) == filename and any_to_bytes(file['body']) != val:
-                        errors_count += 1
-
-            elif re.search(b'name=', part):
-                errors_count += 1
-
-        self.json.put({'errors_count': errors_count})
+                for file in FILES[actual_name]:
+                    if any_to_bytes(file['filename']) == filename and any_to_bytes(file['body']) != actual_val:
+                        raise HTTPError(500)

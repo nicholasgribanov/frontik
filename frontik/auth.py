@@ -14,7 +14,7 @@ class DebugUnauthorizedError(Finish):
 def passed_basic_auth(handler, login, passwd):
     auth_header = handler.request.headers.get('Authorization')
     if auth_header and auth_header.startswith('Basic '):
-        method, auth_b64 = auth_header.split(' ')
+        _, auth_b64 = auth_header.split(' ', maxsplit=1)
         try:
             decoded_value = to_unicode(base64.b64decode(auth_b64))
         except ValueError:

@@ -2,3 +2,6 @@
 source = frontik/
 parallel = True
 branch = True
+
+[xml]
+output = coverage.xml

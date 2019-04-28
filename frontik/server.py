@@ -32,9 +32,9 @@ def parse_configs(config_files):
     else:
         configs_to_read = config_files
 
-    configs_to_read = filter(
+    configs_to_read = list(filter(
         None, [configs_to_read] if not isinstance(configs_to_read, (list, tuple)) else configs_to_read
-    )
+    ))
 
     for config in configs_to_read:
         parse_config_file(config, final=False)
@@ -45,7 +45,7 @@ def parse_configs(config_files):
     bootstrap_core_logging()
 
     for config in configs_to_read:
-        log.debug('using config: %s', config)
+        log.info('using config: %s', config)
         if options.autoreload:
             tornado.autoreload.watch(config)
 

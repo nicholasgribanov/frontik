@@ -8,7 +8,7 @@ integrations_logger = logging.getLogger('integrations')
 
 
 def load_integrations(app) -> Tuple[List['Integration'], List[Future]]:
-    for importer, module_name, is_package in pkgutil.iter_modules(__path__):
+    for _, module_name, _ in pkgutil.iter_modules(__path__):
         try:
             importlib.import_module(f'frontik.integrations.{module_name}')
         except Exception as e:

@@ -364,8 +364,13 @@ class DebugTransform(OutputTransform):
     _DEBUG_TEMPLATE = _JINJA_ENV.get_template('debug.html')
 
     def __init__(self, application, request):
+        super().__init__(request)
+
         self.application = application
         self.request = request
+        self.status_code = None
+        self.headers = None
+        self.chunks = None
 
     def is_enabled(self):
         return getattr(self.request, '_debug_enabled', False)

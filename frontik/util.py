@@ -42,8 +42,8 @@ def make_url(base, **query_args):
 
     if qs:
         return to_unicode(base) + ('&' if '?' in base else '?') + qs
-    else:
-        return to_unicode(base)
+
+    return to_unicode(base)
 
 
 def decode_string_from_charset(string, charsets=('cp1251',)):
@@ -82,53 +82,21 @@ def make_mfd(fields, files):
     fields :: { field_name : field_value }
     files :: { field_name: [{ "filename" : fn, "body" : bytes }]}
     """
-    def addslashes(text):
-        for s in (b'\\', b'"'):
-            if s in text:
-                text = text.replace(s, b'\\' + s)
-        return text
-
-    def create_field(name, data):
-        name = addslashes(any_to_bytes(name))
-
-        return [
-            b'--', BOUNDARY,
-            b'\r\nContent-Disposition: form-data; name="', name,
-            b'"\r\n\r\n', any_to_bytes(data), b'\r\n'
-        ]
-
-    def create_file_field(name, filename, data, content_type):
-        if content_type == 'application/unknown':
-            content_type = mimetypes.guess_type(filename)[0] or media_types.APPLICATION_OCTET_STREAM
-        else:
-            content_type = content_type.replace('\n', ' ').replace('\r', ' ')
-
-        name = addslashes(any_to_bytes(name))
-        filename = addslashes(any_to_bytes(filename))
-
-        return [
-            b'--', BOUNDARY,
-            b'\r\nContent-Disposition: form-data; name="', name, b'"; filename="', filename,
-            b'"\r\nContent-Type: ', any_to_bytes(content_type),
-            b'\r\n\r\n', any_to_bytes(data), b'\r\n'
-        ]
 
     body = []
 
     for name, data in fields.items():
-        if data is None:
-            continue
-
         if isinstance(data, list):
             for value in data:
                 if value is not None:
-                    body.extend(create_field(name, value))
-        else:
-            body.extend(create_field(name, data))
+                    body.extend(_create_field(name, value))
+
+        elif data is not None:
+            body.extend(_create_field(name, data))
 
     for name, files in files.items():
         for file in files:
-            body.extend(create_file_field(
+            body.extend(_create_file_field(
                 name, file['filename'], file['body'], file.get('content_type', 'application/unknown')
             ))
 
@@ -136,6 +104,40 @@ def make_mfd(fields, files):
     content_type = b'multipart/form-data; boundary=' + BOUNDARY
 
     return b''.join(body), content_type
+
+
+def _addslashes(text):
+    for s in (b'\\', b'"'):
+        if s in text:
+            text = text.replace(s, b'\\' + s)
+    return text
+
+
+def _create_field(name, data):
+    name = _addslashes(any_to_bytes(name))
+
+    return [
+        b'--', BOUNDARY,
+        b'\r\nContent-Disposition: form-data; name="', name,
+        b'"\r\n\r\n', any_to_bytes(data), b'\r\n'
+    ]
+
+
+def _create_file_field(name, filename, data, content_type):
+    if content_type == 'application/unknown':
+        content_type = mimetypes.guess_type(filename)[0] or media_types.APPLICATION_OCTET_STREAM
+    else:
+        content_type = content_type.replace('\n', ' ').replace('\r', ' ')
+
+    name = _addslashes(any_to_bytes(name))
+    filename = _addslashes(any_to_bytes(filename))
+
+    return [
+        b'--', BOUNDARY,
+        b'\r\nContent-Disposition: form-data; name="', name, b'"; filename="', filename,
+        b'"\r\nContent-Type: ', any_to_bytes(content_type),
+        b'\r\n\r\n', any_to_bytes(data), b'\r\n'
+    ]
 
 
 def get_cookie_or_url_param_value(handler, param_name):

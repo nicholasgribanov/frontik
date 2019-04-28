@@ -20,17 +20,20 @@ class TestHandler(unittest.TestCase):
 
     def test_head(self):
         response = frontik_test_app.get_page('handler/head', method=requests.head)
-        self.assertEqual(response.headers['X-Foo'], 'Bar')
+        self.assertEqual(response.headers['x-foo'], 'Bar')
         self.assertEqual(response.content, b'')
 
     def test_head_url(self):
-        response = frontik_test_app.get_page('handler/head_url')
-        self.assertEqual(response.content, b'OK')
+        response = frontik_test_app.get_page('handler/delete', method=requests.options)
+        self.assertEqual(response.status_code, 405)
+        self.assertEqual(response.headers['allow'], 'get, delete')
+        self.assertEqual(response.content, b'')
 
     def test_no_method(self):
         response = frontik_test_app.get_page('handler/head', method=requests.post)
         self.assertEqual(response.status_code, 405)
-        self.assertEqual(response.headers['Allow'], 'get')
+        self.assertEqual(response.headers['allow'], 'get')
+        self.assertEqual(response.content, b'')
 
     def test_delete_post_arguments(self):
         response = frontik_test_app.get_page('handler/delete', method=requests.delete)

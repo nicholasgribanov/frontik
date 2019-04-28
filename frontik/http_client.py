@@ -45,6 +45,7 @@ http_client_logger = logging.getLogger('http_client')
 
 class FailFastError(Exception):
     def __init__(self, failed_request: 'RequestResult'):
+        super().__init__()
         self.failed_request = failed_request
 
 
