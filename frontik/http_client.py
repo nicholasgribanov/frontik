@@ -12,7 +12,7 @@ import pycurl
 import logging
 from lxml import etree
 from tornado.escape import to_unicode, utf8
-from tornado.ioloop import IOLoop
+from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.curl_httpclient import CurlAsyncHTTPClient
 from tornado.httpclient import AsyncHTTPClient, HTTPRequest, HTTPResponse, HTTPError
 from tornado.httputil import HTTPHeaders
@@ -477,11 +477,18 @@ class HttpClientFactory:
 
         self._send_metrics_to_kafka = send_metrics_to_kafka
         self._kafka_cluster = kafka_cluster
+        self._metrics_callback = None
 
     def get_http_client(self, handler, modify_http_request_hook):
         kafka_producer = (
             self.application.get_kafka_producer(self._kafka_cluster) if self._send_metrics_to_kafka else None
         )
+
+        if self._metrics_callback is None:
+            self._metrics_callback = PeriodicCallback(
+                self._statsd_metrics_callback, options.http_client_metrics_interval_sec * 1000
+            )
+            self._metrics_callback.start()
 
         return HttpClient(
             self.tornado_http_client, handler.debug_mode, modify_http_request_hook, self.upstreams,
@@ -514,6 +521,12 @@ class HttpClientFactory:
 
         upstream.update(upstream_config, servers)
         http_client_logger.info('update %s upstream: %s', name, str(upstream))
+
+    def _statsd_metrics_callback(self):
+        self.application.statsd_client.stack()
+        self.application.statsd_client.gauge('http.client.max_clients', options.max_http_clients)
+        self.application.statsd_client.gauge('http.client.free_clients', len(self.tornado_http_client._free_list))
+        self.application.statsd_client.flush()
 
 
 class ParseMode(IntEnum):

@@ -420,14 +420,12 @@ class DebugTransform(OutputTransform):
         debug_log_data.set('code', str(int(self.status_code)))
         debug_log_data.set('handler-name', request_context.get_handler_name())
         debug_log_data.set('started', _format_number(self.request._start_time))
-        debug_log_data.set('request-id', str(self.request.request_id))
+        debug_log_data.set('request-id', request_context.get_request_id())
         debug_log_data.set('stages-total', _format_number((time.time() - self.request._start_time) * 1000))
 
         try:
             debug_log_data.append(E.versions(
-                _pretty_print_xml(
-                    frontik.app.get_frontik_and_apps_versions(self.application)
-                )
+                _pretty_print_json(self.application.get_versions())
             ))
         except Exception:
             debug_log.exception('cannot add version information')

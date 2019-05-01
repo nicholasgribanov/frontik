@@ -56,6 +56,7 @@ define('http_proxy_host', default=None, type=str)
 define('http_proxy_port', default=3128, type=int)
 define('http_client_allow_cross_datacenter_requests', default=False, type=bool)
 define('http_client_metrics_kafka_cluster', default=None, type=str)
+define('http_client_metrics_interval_sec', default=60, type=int)
 
 define('kafka_clusters', default={}, type=dict)
 

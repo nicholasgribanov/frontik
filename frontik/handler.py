@@ -59,7 +59,7 @@ class PageHandler(RequestHandler):
 
     def __init__(self, application, request, **kwargs):
         self.name = self.__class__.__name__
-        self.request_id = request.request_id = request_context.get_request_id()
+        self.request_id = request_context.get_request_id()
         self.config = application.config
         self.log = handler_logger
         self.text = None

@@ -5,8 +5,6 @@ from frontik.app import FrontikApplication
 from frontik.loggers import bootstrap_logger
 from frontik.options import options
 
-from tests.projects.test_app import config
-
 
 class TestApplication(FrontikApplication):
     def __init__(self, **settings):
@@ -23,11 +21,8 @@ class TestApplication(FrontikApplication):
         except Exception:
             pass
 
-    def application_config(self):
-        return config
-
-    def application_version_xml(self):
-        return config.version
+    def application_version(self):
+        return 'last version'
 
 
 class TestKafkaProducer:

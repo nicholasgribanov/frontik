@@ -12,7 +12,7 @@ from tornado.web import Application, RequestHandler
 
 import frontik.producers.json_producer
 import frontik.producers.xml_producer
-from frontik import integrations, media_types, request_context
+from frontik import integrations, request_context
 from frontik.debug import DebugTransform
 from frontik.handler import ErrorHandler
 from frontik.http_client import HttpClientFactory
@@ -29,32 +29,13 @@ if TYPE_CHECKING:
     from frontik.integrations.sentry import SentryLogger
 
 
-def get_frontik_and_apps_versions(application):
-    versions = etree.Element('versions')
-
-    etree.SubElement(versions, 'frontik').text = frontik_version
-    etree.SubElement(versions, 'tornado').text = tornado.version
-    etree.SubElement(versions, 'lxml.etree.LXML').text = '.'.join(str(x) for x in etree.LXML_VERSION)
-    etree.SubElement(versions, 'lxml.etree.LIBXML').text = '.'.join(str(x) for x in etree.LIBXML_VERSION)
-    etree.SubElement(versions, 'lxml.etree.LIBXSLT').text = '.'.join(str(x) for x in etree.LIBXSLT_VERSION)
-    etree.SubElement(versions, 'pycurl').text = pycurl.version
-    etree.SubElement(versions, 'python').text = sys.version.replace('\n', '')
-    etree.SubElement(versions, 'application', name=options.app).extend(application.application_version_xml())
-
-    return versions
-
-
 class VersionHandler(RequestHandler):
     def get(self):
-        self.set_header('Content-Type', 'text/xml')
-        self.write(
-            etree.tostring(get_frontik_and_apps_versions(self.application), encoding='utf-8', xml_declaration=True)
-        )
+        self.finish(self.application.get_versions())
 
 
 class StatusHandler(RequestHandler):
     def get(self):
-        self.set_header('Content-Type', media_types.APPLICATION_JSON)
         self.finish(self.application.get_current_status())
 
 
@@ -92,7 +73,7 @@ class FrontikApplication(Application):
         self.transforms.insert(0, partial(DebugTransform, self))
 
     def find_handler(self, request, **kwargs):
-        request_id = request.headers.get('X-Request-Id')
+        request_id = request.headers.get('x-request-id')
         if request_id is None:
             request_id = FrontikApplication.next_request_id()
 
@@ -129,13 +110,8 @@ class FrontikApplication(Application):
     def application_config(self):
         return FrontikApplication.DefaultConfig()
 
-    def application_version_xml(self):
-        version = etree.Element('version')
-        version.text = 'unknown'
-        return [version]
-
     def application_version(self):
-        return None
+        return 'unknown'
 
     def init_async(self):
         return []
@@ -144,6 +120,18 @@ class FrontikApplication(Application):
     def next_request_id():
         FrontikApplication.request_id += 1
         return str(FrontikApplication.request_id)
+
+    def get_versions(self):
+        return {
+            'frontik': frontik_version,
+            'tornado': tornado.version,
+            'lxml': '.'.join(str(x) for x in etree.LXML_VERSION),
+            'libxml': '.'.join(str(x) for x in etree.LIBXML_VERSION),
+            'libxslt': '.'.join(str(x) for x in etree.LIBXSLT_VERSION),
+            'pycurl': pycurl.version,
+            'python': sys.version.replace('\n', ''),
+            options.app: self.application_version()
+        }
 
     def get_current_status(self):
         cur_uptime = time.time() - self.start_time
@@ -157,10 +145,6 @@ class FrontikApplication(Application):
         return {
             'uptime': uptime_value,
             'datacenter': options.datacenter,
-            'workers': {
-                'total': options.max_http_clients,
-                'free': len(self.http_client_factory.tornado_http_client._free_list)
-            }
         }
 
     def log_request(self, handler):
