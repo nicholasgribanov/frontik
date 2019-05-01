@@ -224,23 +224,16 @@
             .trace-lines {
                 margin: 10px 0;
                 margin-left: 12px;
-                padding: 4px;
+                padding: 0;
                 border-collapse: collapse;
                 background: #fff;
             }
                 .trace-lines__column {
                     margin: 0;
-                    padding: 2px 4px;
+                    padding: 0;
                 }
-                .trace-lines__line {
-                    display: block;
-                    padding: 1px 0;
-                    font-family: monospace;
-                    white-space: pre;
-                    clear: both;
-                }
-                    .trace-lines__line.selected {
-                        color: #c00;
+                    .trace-lines__line.selected code {
+                        background-color: #cc0;
                     }
             .exception {
                 padding-left: 20px;
@@ -314,6 +307,9 @@
                 padding: 4px;
                 background: #fff;
                 font-family: monospace;
+            }
+            pre code.hljs {
+                padding: 2px;
             }
         </style>
     </xsl:template>

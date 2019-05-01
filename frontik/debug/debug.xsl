@@ -3,8 +3,8 @@
 
     <xsl:output omit-xml-declaration="yes" method="html" indent="no" encoding="utf-8"/>
 
-    <xsl:include href="debug-css.xsl"/>
     <xsl:include href="highlight-css.xsl"/>
+    <xsl:include href="debug-css.xsl"/>
     <xsl:include href="debug-js.xsl"/>
     <xsl:include href="vkbeautify-js.xsl"/>
     <xsl:include href="highlight-js.xsl"/>
@@ -250,7 +250,10 @@
             <xsl:if test="../@selected = 'true'">
                 <xsl:attribute name="class">trace-lines__line selected</xsl:attribute>
             </xsl:if>
-            <xsl:value-of select="."/>
+            <xsl:call-template name="highlighted-block">
+                <xsl:with-param name="text" select="."/>
+                <xsl:with-param name="mode" select="'python'"/>
+            </xsl:call-template>
         </span>
     </xsl:template>
 
@@ -439,7 +442,10 @@
     </xsl:template>
 
     <xsl:template match="request" mode="params-info-body">
-        <xsl:value-of select="curl"/>
+        <xsl:call-template name="highlighted-block">
+            <xsl:with-param name="text" select="curl"/>
+            <xsl:with-param name="mode" select="'bash'"/>
+        </xsl:call-template>
     </xsl:template>
 
     <xsl:template match="time_info" mode="params-info-body">
@@ -543,6 +549,9 @@
                 <xsl:attribute name="class">
                     <xsl:if test="$mode != ''">
                         <xsl:value-of select="$mode"/><xsl:text> highlighted-code</xsl:text>
+                    </xsl:if>
+                    <xsl:if test="$mode = 'python'">
+                        <xsl:text> no-overflow</xsl:text>
                     </xsl:if>
                 </xsl:attribute>
                 <xsl:value-of select="$text"/>
