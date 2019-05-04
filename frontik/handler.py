@@ -1,8 +1,10 @@
 import asyncio
+import enum
 import http.client
 import logging
 import time
 from asyncio import Future
+from bisect import bisect
 from functools import wraps
 from typing import TYPE_CHECKING
 
@@ -15,8 +17,6 @@ from tornado.web import RequestHandler
 
 import frontik.auth
 import frontik.handler_active_limit
-import frontik.producers.json_producer
-import frontik.producers.xml_producer
 import frontik.util
 from frontik import media_types, request_context
 from frontik.auth import DEBUG_AUTH_HEADER_NAME
@@ -24,12 +24,13 @@ from frontik.futures import AbortAsyncGroup, AsyncGroup
 from frontik.debug import DEBUG_HEADER_NAME, DebugMode
 from frontik.http_client import FailFastError, HttpClient, ParseMode, RequestResult
 from frontik.preprocessors import _get_preprocessors, _unwrap_preprocessors
+from frontik.renderers import GenericRenderer, Renderer
 from frontik.util import make_url
 from frontik.version import version as frontik_version
 
 if TYPE_CHECKING:
     from types import MethodType
-    from typing import Any, Optional
+    from typing import Any, List, Optional
 
     from aiokafka import AIOKafkaProducer
 
@@ -53,6 +54,13 @@ class HTTPErrorWithPostprocessors(tornado.web.HTTPError):
 handler_logger = logging.getLogger('handler')
 
 
+class RendererPriority(enum.IntEnum):
+    JINJA = XSLT = 1
+    GENERIC = 2
+    JSON = 3
+    XML = 4
+
+
 class PageHandler(RequestHandler):
 
     preprocessors = ()
@@ -62,7 +70,10 @@ class PageHandler(RequestHandler):
         self.request_id = request_context.get_request_id()
         self.config = application.config
         self.log = handler_logger
+
         self.text = None
+        self.renderers = []  # type: List[Renderer]
+        self.register_renderer(GenericRenderer(self), RendererPriority.GENERIC)
 
         super().__init__(application, request, **kwargs)
 
@@ -84,12 +95,6 @@ class PageHandler(RequestHandler):
         self.active_limit = frontik.handler_active_limit.ActiveHandlersLimit(self.statsd_client)
         self.debug_mode = DebugMode(self)
         self.finish_group = AsyncGroup(lambda: None, name='finish')
-
-        self.json_producer = self.application.json.get_producer(self)
-        self.json = self.json_producer.json
-
-        self.xml_producer = self.application.xml.get_producer(self)
-        self.doc = self.xml_producer.doc
 
         self._http_client = self.application.http_client_factory.get_http_client(
             self, self.modify_http_client_request
@@ -249,6 +254,10 @@ class PageHandler(RequestHandler):
 
     # Finish page
 
+    def register_renderer(self, renderer: Renderer, priority: int):
+        i = bisect(self.renderers, (priority, None))
+        self.renderers.insert(i, (priority, renderer))
+
     def abort(self):
         # self.finish_group.abort()
 
@@ -279,18 +288,16 @@ class PageHandler(RequestHandler):
         postprocessors_completed = await self._run_postprocessors(self._postprocessors)
 
         if not postprocessors_completed:
-            self.log.info('page was already finished, skipping page producer')
+            self.log.info('page was already finished, skipping renderer')
             return
 
-        if self.text is not None:
-            renderer = self._generic_producer
-        elif not self.json.is_empty():
-            renderer = self.json_producer
-        else:
-            renderer = self.xml_producer
+        renderer = next((p for _, p in self.renderers if p.can_apply()), None)  # type: Renderer
+        if renderer is None:
+            self.finish()
+            return
 
         self.log.debug('using %s renderer', renderer)
-        rendered_result = await renderer()
+        rendered_result = await renderer.render()
 
         postprocessed_result = await self._run_template_postprocessors(self._render_postprocessors, rendered_result)
         if postprocessed_result is not None:
@@ -410,8 +417,10 @@ class PageHandler(RequestHandler):
             self._write_buffer = []
             chunk = None
 
-        super().finish(chunk)
-        self.cleanup()
+        try:
+            return super().finish(chunk)
+        finally:
+            self.cleanup()
 
     # Preprocessors and postprocessors
 
@@ -466,25 +475,6 @@ class PageHandler(RequestHandler):
 
     def add_postprocessor(self, postprocessor):
         self._postprocessors.append(postprocessor)
-
-    # Producers
-
-    async def _generic_producer(self):
-        self.log.debug('finishing plaintext')
-
-        if self._headers.get('Content-Type') is None:
-            self.set_header('Content-Type', media_types.TEXT_HTML)
-
-        return self.text
-
-    def xml_from_file(self, filename: str):
-        return self.xml_producer.xml_from_file(filename)
-
-    def set_xsl(self, filename: str):
-        return self.xml_producer.set_xsl(filename)
-
-    def set_template(self, filename: str):
-        return self.json_producer.set_template(filename)
 
     # HTTP client methods
 
@@ -607,3 +597,79 @@ class ErrorHandler(PageHandler, tornado.web.ErrorHandler):
 
 class RedirectHandler(PageHandler, tornado.web.RedirectHandler):
     pass
+
+
+class JsonPageHandler(PageHandler):
+    def __init__(self, application, request, **kwargs):
+        super().__init__(application, request, **kwargs)
+
+        self._json_renderer = None
+        self.json = None
+
+    def prepare(self):
+        super().prepare()
+
+        json_renderer = self.application.json_renderer_factory.get_renderer(self)
+
+        self.register_renderer(json_renderer, RendererPriority.JSON)
+        self._json_renderer = json_renderer
+        self.json = json_renderer.json
+
+
+class JinjaPageHandler(JsonPageHandler):
+    def __init__(self, application, request, **kwargs):
+        super().__init__(application, request, **kwargs)
+
+        self._jinja_renderer = None
+
+    def prepare(self):
+        super().prepare()
+
+        jinja_renderer = self.application.jinja_renderer_factory.get_renderer(self)
+
+        self.register_renderer(jinja_renderer, RendererPriority.JINJA)
+        self._jinja_renderer = jinja_renderer
+
+    def set_template(self, filename: str):
+        return self._jinja_renderer.set_template(filename)
+
+    def get_jinja_context(self) -> dict:
+        return self.json.to_dict()
+
+
+class XmlPageHandler(PageHandler):
+    def __init__(self, application, request, **kwargs):
+        super().__init__(application, request, **kwargs)
+
+        self._xml_renderer = None
+        self.doc = None
+
+    def prepare(self):
+        super().prepare()
+
+        xml_renderer = self.application.xml_renderer_factory.get_renderer(self)
+
+        self.register_renderer(xml_renderer, RendererPriority.XML)
+        self._xml_renderer = xml_renderer
+        self.doc = xml_renderer.doc
+
+    def xml_from_file(self, filename: str):
+        return self._xml_renderer.xml_from_file(filename)
+
+
+class XsltPageHandler(XmlPageHandler):
+    def __init__(self, application, request, **kwargs):
+        super().__init__(application, request, **kwargs)
+
+        self._xslt_renderer = None
+
+    def prepare(self):
+        super().prepare()
+
+        xslt_renderer = self.application.xslt_renderer_factory.get_renderer(self)
+
+        self.register_renderer(xslt_renderer, RendererPriority.XSLT)
+        self._xslt_renderer = xslt_renderer
+
+    def set_xsl(self, filename: str):
+        return self._xslt_renderer.set_xsl(filename)

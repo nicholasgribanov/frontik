@@ -1,6 +1,6 @@
 import re
 
-import frontik.handler
+from frontik.handler import JsonPageHandler
 from frontik.util import any_to_bytes, any_to_unicode
 
 FIELDS = {
@@ -22,7 +22,7 @@ FILES = {
 }
 
 
-class Page(frontik.handler.PageHandler):
+class Page(JsonPageHandler):
     async def get_page(self):
         self.json.put(self.post_url(self.request.host, self.request.path, data=FIELDS, files=FILES))
 

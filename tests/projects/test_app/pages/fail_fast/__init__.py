@@ -1,6 +1,6 @@
 from tornado import gen
 
-from frontik.handler import HTTPErrorWithPostprocessors, PageHandler
+from frontik.handler import HTTPErrorWithPostprocessors, JsonPageHandler
 from frontik.preprocessors import preprocessor
 
 
@@ -11,7 +11,7 @@ async def get_page_preprocessor(handler):
     })
 
 
-class Page(PageHandler):
+class Page(JsonPageHandler):
     @get_page_preprocessor
     async def get_page(self):
         fail_fast = self.get_argument('fail_fast', 'false') == 'true'

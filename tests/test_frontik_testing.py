@@ -2,12 +2,12 @@ from lxml import etree
 from tornado import gen
 
 from frontik.app import FrontikApplication
-from frontik.handler import PageHandler
+from frontik.handler import PageHandler, XmlPageHandler
 from frontik.testing import FrontikTestCase
 from tests.projects.test_app.pages.handler import delete
 
 
-class AsyncHandler(PageHandler):
+class AsyncHandler(XmlPageHandler):
     async def get_page(self):
         self.result = 0
 

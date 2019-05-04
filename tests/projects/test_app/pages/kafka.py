@@ -1,9 +1,9 @@
 import asyncio
 
-from frontik.handler import PageHandler
+from frontik.handler import JsonPageHandler
 
 
-class Page(PageHandler):
+class Page(JsonPageHandler):
     async def get_page(self):
         self.get_kafka_producer('infrastructure').enable_for_request_id(self.request_id)
 

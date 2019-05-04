@@ -4,14 +4,14 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 
 from frontik import request_context
-from frontik.handler import PageHandler
+from frontik.handler import JsonPageHandler
 
 
 def _callback(name, handler, *args):
     handler.json.put({name: request_context.get_handler_name()})
 
 
-class Page(PageHandler):
+class Page(JsonPageHandler):
     async def get_page(self):
         def _waited_callback(name):
             return self.finish_group.add(partial(_callback, name, self))

@@ -1,10 +1,10 @@
 from tornado import gen
 
-from frontik.handler import PageHandler
+from frontik.handler import JsonPageHandler
 from frontik.http_client import ParseMode
 
 
-class Page(PageHandler):
+class Page(JsonPageHandler):
     async def get_page(self):
         fail_callback = self.get_argument('fail_callback', 'false') == 'true'
         fail_request = self.get_argument('fail_request', 'false') == 'true'

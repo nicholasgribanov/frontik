@@ -1,10 +1,10 @@
 from tornado.escape import to_unicode
 
-from frontik.handler import HTTPErrorWithPostprocessors, PageHandler
+from frontik.handler import HTTPErrorWithPostprocessors, JsonPageHandler
 from frontik.http_client import ParseMode
 
 
-class Page(PageHandler):
+class Page(JsonPageHandler):
     async def get_page(self):
         self.json.put(self.post_url(self.request.host, self.request.path, parse_response=ParseMode.ALWAYS))
         self.json.put(self.put_url(self.request.host, self.request.path, parse_response=ParseMode.ON_SUCCESS))

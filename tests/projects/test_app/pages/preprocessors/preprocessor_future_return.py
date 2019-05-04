@@ -1,4 +1,4 @@
-from frontik.handler import PageHandler
+from frontik.handler import JsonPageHandler
 from frontik.preprocessors import preprocessor
 
 
@@ -20,7 +20,7 @@ async def pp2(handler):
     })
 
 
-class Page(PageHandler):
+class Page(JsonPageHandler):
     @pp1
     @pp2
     async def get_page(self):

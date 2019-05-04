@@ -1,7 +1,7 @@
-import frontik.handler
+from frontik.handler import JsonPageHandler
 
 
-class Page(frontik.handler.PageHandler):
+class Page(JsonPageHandler):
     exceptions = []
 
     async def post_page(self):

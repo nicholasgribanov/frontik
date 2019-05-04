@@ -1,11 +1,11 @@
 from lxml import etree
 
-import frontik.handler
+from frontik.handler import XmlPageHandler
 
 CDATA_XML = b'<root><![CDATA[test<ba//d>]]></root>'
 
 
-class Page(frontik.handler.PageHandler):
+class Page(XmlPageHandler):
     async def get_page(self):
         def _cb(xml, resp):
             xpath = xml.xpath('/doc/*')

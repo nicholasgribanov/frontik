@@ -1,7 +1,7 @@
-import frontik.handler
+from frontik.handler import JinjaPageHandler
 
 
-class Page(frontik.handler.PageHandler):
+class Page(JinjaPageHandler):
     async def get_page(self):
         self.set_template('main.html')  # This template is located in the `templates` folder
         self.json.put(

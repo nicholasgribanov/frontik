@@ -2,7 +2,7 @@ import time
 
 from tornado.concurrent import Future
 
-from frontik.handler import PageHandler
+from frontik.handler import JsonPageHandler
 from frontik.preprocessors import preprocessor
 
 
@@ -23,8 +23,7 @@ def waiting_preprocessor(sleep_time_sec, preprocessor_name, add_preprocessor_fut
     return pp
 
 
-class Page(PageHandler):
-
+class Page(JsonPageHandler):
     @waiting_preprocessor(0.7, "should_finish_after_page_finish", False)
     @waiting_preprocessor(0.5, "should_finish_third", True)
     @waiting_preprocessor(0.1, "should_finish_first", False)

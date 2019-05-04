@@ -1,10 +1,11 @@
 from lxml.builder import E
 
-from frontik import handler, media_types
+from frontik import media_types
+from frontik.handler import JsonPageHandler, XsltPageHandler
 from frontik.http_client import Server
 
 
-class Page(handler.PageHandler):
+class Page(JsonPageHandler, XsltPageHandler):
     async def get_page(self):
         self.log.debug('debug: starting debug page')
 

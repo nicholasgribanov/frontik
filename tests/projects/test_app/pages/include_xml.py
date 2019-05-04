@@ -1,6 +1,6 @@
-import frontik.handler
+from frontik.handler import XmlPageHandler
 
 
-class Page(frontik.handler.PageHandler):
+class Page(XmlPageHandler):
     async def get_page(self):
         self.doc.put(self.xml_from_file('aaa.xml'))

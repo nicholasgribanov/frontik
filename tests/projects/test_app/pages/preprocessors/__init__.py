@@ -4,7 +4,7 @@ import time
 from tornado.concurrent import Future
 from tornado.web import HTTPError
 
-from frontik.handler import PageHandler
+from frontik.handler import JsonPageHandler
 from frontik.preprocessors import preprocessor
 
 
@@ -56,7 +56,7 @@ async def pp_not_waited_callback(handler):
     handler.put_url(handler.request.host, handler.request.path, callback=_cb)
 
 
-class Page(PageHandler):
+class Page(JsonPageHandler):
     preprocessors = [pp0('pp01'), pp0('pp02')]
 
     def prepare(self):

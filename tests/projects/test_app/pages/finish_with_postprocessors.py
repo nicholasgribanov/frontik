@@ -1,10 +1,10 @@
 from lxml import etree
 from tornado.web import HTTPError
 
-from frontik.handler import FinishWithPostprocessors, PageHandler
+from frontik.handler import FinishWithPostprocessors, JsonPageHandler, XsltPageHandler
 
 
-class Page(PageHandler):
+class Page(JsonPageHandler, XsltPageHandler):
     def prepare(self):
         super().prepare()
 

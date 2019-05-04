@@ -1,9 +1,9 @@
 import asyncio
 
-from frontik.handler import AbortAsyncGroup, PageHandler
+from frontik.handler import AbortAsyncGroup, JsonPageHandler
 
 
-class Page(PageHandler):
+class Page(JsonPageHandler):
     data = {}
 
     async def get_page(self):

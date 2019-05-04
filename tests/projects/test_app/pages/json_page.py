@@ -1,18 +1,16 @@
-from frontik import handler, media_types
+from frontik import media_types
+from frontik.handler import JinjaPageHandler
 
 
-class Page(handler.PageHandler):
-    def prepare(self):
+class Page(JinjaPageHandler):
+    def get_jinja_context(self):
         if self.get_argument('custom_render', 'false') == 'true':
-            def jinja_context_provider(handler):
-                return {
-                    'req1': {'result': 'custom1'},
-                    'req2': {'result': 'custom2'},
-                }
+            return {
+                'req1': {'result': 'custom1'},
+                'req2': {'result': 'custom2'},
+            }
 
-            self.jinja_context_provider = jinja_context_provider
-
-        super().prepare()
+        return super().get_jinja_context()
 
     async def get_page(self):
         invalid_json = self.get_argument('invalid', 'false')

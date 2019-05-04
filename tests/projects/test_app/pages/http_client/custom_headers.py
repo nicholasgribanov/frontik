@@ -1,7 +1,7 @@
-import frontik.handler
+from frontik.handler import JsonPageHandler
 
 
-class Page(frontik.handler.PageHandler):
+class Page(JsonPageHandler):
     async def get_page(self):
         self.json.put(self.post_url(self.request.host, self.request.path))
 

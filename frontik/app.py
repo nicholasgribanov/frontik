@@ -10,13 +10,12 @@ from lxml import etree
 from tornado.options import options
 from tornado.web import Application, RequestHandler
 
-import frontik.producers.json_producer
-import frontik.producers.xml_producer
 from frontik import integrations, request_context
 from frontik.debug import DebugTransform
 from frontik.handler import ErrorHandler
 from frontik.http_client import HttpClientFactory
 from frontik.loggers import CUSTOM_JSON_EXTRA, JSON_REQUESTS_LOGGER
+from frontik.renderers import jinja_renderer, json_renderer, xml_renderer, xslt_renderer
 from frontik.routing import FileMappingRouter, FrontikRouter
 from frontik.version import version as frontik_version
 
@@ -56,8 +55,10 @@ class FrontikApplication(Application):
         self.app = settings.get('app')
         self.app_root = settings.get('app_root')
 
-        self.xml = frontik.producers.xml_producer.XMLProducerFactory(self)
-        self.json = frontik.producers.json_producer.JsonProducerFactory(self)
+        self.xml_renderer_factory = xml_renderer.XmlRendererFactory(self)
+        self.xslt_renderer_factory = xslt_renderer.XsltRendererFactory(self)
+        self.json_renderer_factory = json_renderer.JsonRendererFactory(self)
+        self.jinja_renderer_factory = jinja_renderer.JinjaRendererFactory(self)
 
         self.http_client_factory = HttpClientFactory(self, getattr(self.config, 'http_upstreams', {}))
 

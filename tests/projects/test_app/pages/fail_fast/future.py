@@ -2,10 +2,10 @@ from tornado import gen
 from tornado.concurrent import Future
 from tornado.ioloop import IOLoop
 
-from frontik.handler import PageHandler
+from frontik.handler import JsonPageHandler
 
 
-class Page(PageHandler):
+class Page(JsonPageHandler):
     async def get_page(self):
         fail_future = self.get_argument('fail_future', 'false') == 'true'
 

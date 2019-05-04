@@ -1,11 +1,12 @@
-import frontik.handler
 from tornado.ioloop import IOLoop
+
+from frontik.handler import PageHandler
 
 from tests.projects.balancer_app import get_server
 from tests.projects.balancer_app.pages import check_all_requests_done, check_all_servers_occupied
 
 
-class Page(frontik.handler.PageHandler):
+class Page(PageHandler):
     async def get_page(self):
         server = get_server(self, 'free')
         self.application.http_client_factory.register_upstream(

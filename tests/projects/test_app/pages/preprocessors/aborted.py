@@ -1,6 +1,6 @@
 from tornado.web import HTTPError
 
-from frontik.handler import FinishWithPostprocessors, HTTPErrorWithPostprocessors, PageHandler
+from frontik.handler import FinishWithPostprocessors, HTTPErrorWithPostprocessors, JsonPageHandler
 from frontik.preprocessors import preprocessor
 
 
@@ -39,7 +39,7 @@ async def pp_after(handler):
     handler.run.append('after')
 
 
-class Page(PageHandler):
+class Page(JsonPageHandler):
     def prepare(self):
         super().prepare()
 

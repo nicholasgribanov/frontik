@@ -1,9 +1,9 @@
 import asyncio
 
-from frontik.handler import FinishWithPostprocessors, PageHandler
+from frontik.handler import FinishWithPostprocessors, JsonPageHandler
 
 
-class Page(PageHandler):
+class Page(JsonPageHandler):
     counter_static = 0
 
     def prepare(self):

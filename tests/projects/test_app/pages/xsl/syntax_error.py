@@ -1,9 +1,9 @@
 from lxml import etree
 
-import frontik.handler
+from frontik.handler import XsltPageHandler
 
 
-class Page(frontik.handler.PageHandler):
+class Page(XsltPageHandler):
     async def get_page(self):
         self.set_xsl('syntax_error.xsl')
         self.doc.put(etree.Element('ok'))

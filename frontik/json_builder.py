@@ -1,5 +1,5 @@
 import json
-from typing import Any, List, Type
+from typing import Any, Type
 
 from tornado.concurrent import Future
 
@@ -45,16 +45,9 @@ class FrontikJsonEncoder(json.JSONEncoder):
 class JsonBuilder:
     __slots__ = ('_data', '_encoder', 'root_node')
 
-    def __init__(self, root_node: str = None, json_encoder: Type[FrontikJsonEncoder] = None):
-        if root_node is not None and not isinstance(root_node, str):
-            raise TypeError(f'Cannot set {root_node} as root node')
-
-        if json_encoder is not None and not issubclass(json_encoder, FrontikJsonEncoder):
-            raise TypeError('`json_encoder` must be an instance of FrontikJsonEncoder')
-
-        self._data = []  # type: List[Any]
+    def __init__(self, json_encoder: Type[FrontikJsonEncoder] = None):
+        self._data = []
         self._encoder = json_encoder
-        self.root_node = root_node
 
     def put(self, chunk) -> 'JsonBuilder':
         """Append a chunk of data to JsonBuilder."""
@@ -84,9 +77,6 @@ class JsonBuilder:
 
             if chunk is not None:
                 result.update(chunk)
-
-        if self.root_node is not None:
-            result = {self.root_node: result}
 
         return result
 
