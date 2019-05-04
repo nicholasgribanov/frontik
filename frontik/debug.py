@@ -1,5 +1,4 @@
 import base64
-import copy
 import inspect
 import json
 import logging
@@ -9,13 +8,13 @@ import re
 import time
 import traceback
 from binascii import crc32
-from datetime import datetime
 from http.cookies import SimpleCookie
 from io import BytesIO
 from urllib.parse import parse_qs, urlparse
+from uuid import uuid4
 
+import jinja2
 from lxml import etree
-from lxml.builder import E
 from tornado.escape import to_unicode, utf8
 from tornado.httpclient import HTTPResponse
 from tornado.httputil import HTTPHeaders
@@ -26,13 +25,39 @@ import frontik.xml_util
 from frontik import media_types, request_context
 from frontik.loggers import BufferedHandler
 
+DEBUG_HEADER_NAME = 'x-hh-debug'
+
 debug_log = logging.getLogger('frontik.debug')
 
 
-def response_to_xml(response):
-    time_info = etree.Element('time_info')
+def response_from_debug(request, response):
+    debug_response = json.loads(response.body)
+    original_response = debug_response.get('original_response')
+
+    if original_response is not None:
+        original_buffer = base64.b64decode(original_response.get('buffer', ''))
+
+        headers = HTTPHeaders(response.headers)
+        headers.update(original_response.get('headers', {}))
+
+        fake_response = HTTPResponse(
+            request,
+            int(original_response.get('code', 599)),
+            headers=headers,
+            buffer=BytesIO(original_buffer),
+            effective_url=response.effective_url,
+            request_time=response.request_time,
+            time_info=response.time_info
+        )
+
+        return debug_response, fake_response
+
+    return None
+
+
+def _response_to_json(response):
     content_type = response.headers.get('Content-Type', '')
-    mode = ''
+    content_type_class = ''
 
     if 'charset' in content_type:
         charset = content_type.partition('=')[-1]
@@ -45,134 +70,99 @@ def response_to_xml(response):
         if not response.body:
             body = ''
         elif 'text/html' in content_type:
-            mode = 'html'
+            content_type_class = 'html'
             body = frontik.util.decode_string_from_charset(response.body, try_charsets)
         elif 'protobuf' in content_type:
             body = repr(response.body)
         elif 'xml' in content_type:
-            mode = 'xml'
+            content_type_class = 'xml'
             body = _pretty_print_xml(etree.fromstring(response.body))
         elif 'json' in content_type:
-            mode = 'javascript'
+            content_type_class = 'javascript'
             body = _pretty_print_json(json.loads(response.body))
         else:
             if 'javascript' in content_type:
-                mode = 'javascript'
+                content_type_class = 'javascript'
             body = frontik.util.decode_string_from_charset(response.body, try_charsets)
 
     except Exception:
         debug_log.exception('cannot parse response body')
         body = repr(response.body)
 
+    time_info = {}
     try:
         for name, value in response.time_info.items():
-            time_info.append(E.time(f'{value * 1000} ms', name=name))
+            time_info[name] = f'{value * 1000} ms'
     except Exception:
         debug_log.exception('cannot append time info')
 
-    try:
-        response = E.response(
-            E.body(body, content_type=content_type, mode=mode),
-            E.code(str(response.code)),
-            E.error(str(response.error)),
-            E.size(str(len(response.body)) if response.body is not None else '0'),
-            E.request_time(_format_number(response.request_time * 1000)),
-            _headers_to_xml(response.headers),
-            _cookies_to_xml(response.headers),
-            time_info,
-        )
-    except Exception:
-        debug_log.exception('cannot log response info')
-        response = E.response(E.body('Cannot log response info'))
-
-    return response
+    return {
+        'content_type_class': content_type_class,
+        'body': body,
+        'code': response.code,
+        'error': str(response.error) if response.error else None,
+        'size': len(response.body) if response.body is not None else 0,
+        'request_time': int(response.request_time * 1000),
+        'headers': _headers_to_json(response.headers),
+        'cookies': _cookies_to_json(response.headers),
+        'time_info': time_info,
+    }
 
 
-def request_to_xml(request):
+def _request_to_json(request):
     content_type = request.headers.get('Content-Type', '')
-    body = etree.Element('body', content_type=content_type)
+    body = None
 
     if request.body:
         try:
             if 'json' in content_type:
-                body.text = _pretty_print_json(json.loads(request.body))
+                body = _pretty_print_json(json.loads(request.body))
             elif 'protobuf' in content_type:
-                body.text = repr(request.body)
+                body = repr(request.body)
             else:
-                body_query = parse_qs(str(request.body), True)
+                body = {}
+                body_query = parse_qs(request.body, True)
                 for name, values in body_query.items():
                     for value in values:
-                        body.append(E.param(to_unicode(value), name=to_unicode(name)))
+                        body[to_unicode(name)] = to_unicode(value)
         except Exception:
             debug_log.exception('cannot parse request body')
-            body.text = repr(request.body)
+            body = repr(request.body)
 
-    try:
-        request = E.request(
-            body,
-            E.start_time(_format_number(request.start_time)),
-            E.method(request.method),
-            E.url(request.url),
-            _params_to_xml(request.url),
-            _headers_to_xml(request.headers),
-            _cookies_to_xml(request.headers),
-            E.curl(
-                request_to_curl_string(request)
-            )
-        )
-    except Exception:
-        debug_log.exception('cannot parse request body')
-        body.text = repr(request.body)
-        request = E.request(body)
-
-    return request
+    return {
+        'content_type': content_type,
+        'body': body,
+        'start_time': request.start_time,
+        'method': request.method,
+        'url': request.url,
+        'query_params': _query_params_to_json(request.url),
+        'headers': _headers_to_json(request.headers),
+        'cookies': _cookies_to_json(request.headers),
+        'curl': _request_to_curl_string(request)
+    }
 
 
-def balanced_request_to_xml(balanced_request, retry, rack, datacenter):
-    info = etree.Element('meta-info')
+def _balanced_request_to_json(balanced_request, retry, rack, datacenter):
+    info = {}
 
     if balanced_request.upstream.balanced:
-        etree.SubElement(info, 'upstream', name=balanced_request.upstream.name.upper())
-        server_params = {'rack': rack, 'datacenter': datacenter}
-        etree.SubElement(info, 'server', **{key: value for key, value in server_params.items() if value})
+        upstream_name = balanced_request.upstream.name.upper()
+        info['upstream'] = {
+            'name': upstream_name,
+            'color': _string_to_color(upstream_name),
+            'server': {
+                'rack': rack,
+                'datacenter': datacenter
+            }
+        }
 
     if retry > 0:
-        etree.SubElement(info, 'retry', count=str(retry))
+        info['retry'] = retry
 
     return info
 
 
-def response_from_debug(request, response):
-    debug_response = etree.XML(response.body)
-    original_response = debug_response.find('original-response')
-
-    if original_response is not None:
-        response_info = frontik.xml_util.xml_to_dict(original_response)
-        original_response.getparent().remove(original_response)
-
-        original_buffer = base64.b64decode(response_info.get('buffer', ''))
-
-        headers = dict(response.headers)
-        response_info_headers = response_info.get('headers', {})
-        if response_info_headers:
-            headers.update(response_info_headers)
-
-        fake_response = HTTPResponse(
-            request,
-            int(response_info.get('code', 599)),
-            headers=HTTPHeaders(headers),
-            buffer=BytesIO(original_buffer),
-            effective_url=response.effective_url,
-            request_time=response.request_time,
-            time_info=response.time_info
-        )
-
-        return debug_response, fake_response
-
-    return None
-
-
-def request_to_curl_string(request):
+def _request_to_curl_string(request):
     def _escape_apos(string):
         return string.replace("'", "'\"'\"'")
 
@@ -185,7 +175,7 @@ def request_to_curl_string(request):
 
     curl_headers = HTTPHeaders(request.headers)
     if request.body and 'Content-Length' not in curl_headers:
-        curl_headers['Content-Length'] = len(request.body)
+        curl_headers['Content-Length'] = str(len(request.body))
 
     if is_binary_body:
         curl_echo_data = f'echo -e {request_body} |'
@@ -212,75 +202,90 @@ def _get_query_parameters(url):
     return parse_qs(urlparse(url).query, True)
 
 
-def _params_to_xml(url):
-    params = etree.Element('params')
+def _query_params_to_json(url):
+    params = []
     query = _get_query_parameters(url)
     for name, values in query.items():
         for value in values:
             try:
-                params.append(E.param(to_unicode(value), name=to_unicode(name)))
+                params.append((to_unicode(name), to_unicode(value)))
             except UnicodeDecodeError:
                 debug_log.exception('cannot decode parameter name or value')
-                params.append(E.param(repr(value), name=repr(name)))
+                params.append((repr(name), repr(value)))
+
     return params
 
 
-def _headers_to_xml(request_or_response_headers):
-    headers = etree.Element('headers')
+def _headers_to_json(request_or_response_headers: HTTPHeaders):
+    headers = []
     for name, value in request_or_response_headers.items():
         if name != 'Cookie':
-            str_value = value if isinstance(value, str) else str(value)
-            headers.append(E.header(to_unicode(str_value), name=name))
+            headers.append((name, to_unicode(value)))
+
     return headers
 
 
-def _cookies_to_xml(request_or_response_headers):
-    cookies = etree.Element('cookies')
+def _cookies_to_json(request_or_response_headers: HTTPHeaders):
+    cookies = []
     if 'Cookie' in request_or_response_headers:
         _cookies = SimpleCookie(request_or_response_headers['Cookie'])
         for cookie in _cookies:
-            cookies.append(E.cookie(_cookies[cookie].value, name=cookie))
+            cookies.append((cookie, _cookies[cookie].value))
+
     return cookies
 
 
-def _exception_to_xml(exc_info, log=debug_log):
-    exc_node = etree.Element('exception')
+def _exception_to_json(exc_info):
+    exception = {
+        'text': ''.join(map(to_unicode, traceback.format_exception(*exc_info)))
+    }
 
     try:
-        trace_node = etree.Element('trace')
+        trace_items = []
         trace = exc_info[2]
         while trace:
             frame = trace.tb_frame
-            trace_step_node = etree.Element('step')
-            trace_lines = etree.Element('lines')
+            trace_step = {
+                'file': inspect.getfile(frame),
+                'locals': pprint.pformat(frame.f_locals)
+            }
 
             try:
                 lines, starting_line = inspect.getsourcelines(frame)
             except IOError:
                 lines, starting_line = [], None
 
+            trace_lines = []
             for i, l in enumerate(lines):
-                line_node = etree.Element('line')
-                line_node.append(E.text(to_unicode(l)))
-                line_node.append(E.number(str(starting_line + i)))
+                line = {
+                    'text': l,
+                    'number': starting_line + i
+                }
+
                 if starting_line + i == frame.f_lineno:
-                    line_node.set('selected', 'true')
-                trace_lines.append(line_node)
+                    line['selected'] = True
 
-            trace_step_node.append(trace_lines)
-            trace_step_node.append(E.file(to_unicode(inspect.getfile(frame))))
-            trace_step_node.append(E.locals(pprint.pformat(frame.f_locals)))
-            trace_node.append(trace_step_node)
+                trace_lines.append(line)
+
+            trace_step['lines'] = trace_lines
+            trace_items.append(trace_step)
             trace = trace.tb_next
-        exc_node.append(trace_node)
+
+        exception['trace'] = trace_items
     except Exception:
-        log.exception('cannot add traceback lines')
+        debug_log.exception('cannot add traceback lines')
 
-    exc_node.append(E.text(''.join(map(to_unicode, traceback.format_exception(*exc_info)))))
-    return exc_node
+    return exception
 
 
-_format_number = '{:.4f}'.format
+def _xslt_profile_to_json(profile):
+    attrs = ('match', 'name', 'mode', 'calls', 'time', 'average')
+    templates = [{attr: tpl.get(attr) for attr in attrs} for tpl in profile]
+
+    return {
+        'templates': templates,
+        'total_time': sum(float(tpl['time']) for tpl in templates)
+    }
 
 
 def _pretty_print_xml(node):
@@ -296,84 +301,68 @@ def _string_to_color(value):
     return '#%02x%02x%02x' % ((value_hash & 0xFF0000) >> 16, (value_hash & 0x00FF00) >> 8, value_hash & 0x0000FF)
 
 
-class DebugBufferedHandler(BufferedHandler):
-    FIELDS = ('created', 'filename', 'funcName', 'levelname', 'levelno', 'lineno', 'module', 'msecs',
-              'name', 'pathname', 'process', 'processName', 'relativeCreated', 'threadName')
+def _generate_id():
+    return uuid4().hex
+
+
+class DebugHandler(BufferedHandler):
+    FIELDS = ('created', 'filename', 'funcName', 'levelname', 'lineno', 'module', 'msecs',
+              'name', 'pathname', 'process', 'relativeCreated', 'threadName')
 
     def __init__(self, request_start_time):
         self.request_start_time = request_start_time
         super().__init__()
 
     def produce_all(self):
-        log_data = etree.Element('log')
-
-        for record in self.records:
-            log_data.append(self._produce_one(record))
-
-        return copy.deepcopy(log_data)
+        return [self._produce_one(record) for record in self.records]
 
     def _produce_one(self, record):
-        entry_attrs = {}
+        entry = {}
         for field in self.FIELDS:
-            val = getattr(record, field)
-            if val is not None:
-                entry_attrs[field] = to_unicode(str(val))
+            entry[field] = getattr(record, field, None)
 
-        entry_attrs['msg'] = to_unicode(record.getMessage())
-
-        try:
-            entry = etree.Element('entry', **entry_attrs)
-        except ValueError:
-            debug_log.exception('error creating log entry with attrs: %s', entry_attrs)
-            entry = etree.Element('entry')
-
-        entry.set('asctime', str(datetime.fromtimestamp(record.created)))
+        entry['msg'] = record.getMessage()
 
         if record.exc_info is not None:
-            entry.append(_exception_to_xml(record.exc_info))
+            entry['exception'] = _exception_to_json(record.exc_info)
 
         if getattr(record, '_response', None) is not None:
-            entry.append(response_to_xml(record._response))
+            entry['response'] = _response_to_json(record._response)
 
         if getattr(record, '_request', None) is not None:
-            entry.append(request_to_xml(record._request))
+            entry['request'] = _request_to_json(record._request)
 
         if getattr(record, '_balanced_request', None) is not None:
-            entry.append(balanced_request_to_xml(record._balanced_request, record._request_retry,
-                                                 record._rack, record._datacenter))
+            entry['balanced_request'] = _balanced_request_to_json(
+                record._balanced_request, record._request_retry, record._rack, record._datacenter
+            )
 
         if getattr(record, '_debug_response', None) is not None:
-            entry.append(E.debug(record._debug_response))
+            entry['debug_response'] = record._debug_response
 
         if getattr(record, '_xslt_profile', None) is not None:
-            entry.append(record._xslt_profile)
+            entry['xslt_profile'] = _xslt_profile_to_json(record._xslt_profile)
 
         if getattr(record, '_xml', None) is not None:
-            entry.append(E.text(etree.tostring(record._xml, encoding='unicode')))
+            entry['xml'] = etree.tostring(record._xml, encoding='unicode', pretty_print=True)
 
         if getattr(record, '_protobuf', None) is not None:
-            entry.append(E.text(str(record._protobuf)))
+            entry['protobuf'] = str(record._protobuf)
 
         if getattr(record, '_text', None) is not None:
-            entry.append(E.text(to_unicode(record._text)))
-
-        if getattr(record, '_stage', None) is not None:
-            stage = record._stage
-
-            entry.append(E.stage(
-                E.name(stage.name),
-                E.delta(_format_number((stage.end_time - stage.start_time) * 1000)),
-                E.start_delta(_format_number((stage.end_time - self.request_start_time) * 1000))
-            ))
+            entry['text'] = record._text
 
         return entry
 
 
-DEBUG_HEADER_NAME = 'X-Hh-Debug'
-DEBUG_XSL = os.path.join(os.path.dirname(__file__), 'debug/debug.xsl')
-
-
 class DebugTransform(OutputTransform):
+    _JINJA_ENV = jinja2.Environment(
+        auto_reload=False, autoescape=True, cache_size=0,
+        loader=jinja2.FileSystemLoader(os.path.join(os.path.dirname(__file__), 'debug')),
+    )
+
+    _DEBUG_TEMPLATE = _JINJA_ENV.get_template('debug.html')
+
     def __init__(self, application, request):
         self.application = application
         self.request = request
@@ -384,7 +373,7 @@ class DebugTransform(OutputTransform):
     def is_inherited(self):
         return getattr(self.request, '_debug_inherited', False)
 
-    def transform_first_chunk(self, status_code, headers, chunk, finishing):
+    def transform_first_chunk(self, status_code, headers: HTTPHeaders, chunk, finishing):
         if not self.is_enabled():
             return status_code, headers, chunk
 
@@ -396,7 +385,7 @@ class DebugTransform(OutputTransform):
             headers = HTTPHeaders({'Content-Type': media_types.TEXT_HTML})
         else:
             headers = HTTPHeaders({
-                'Content-Type': media_types.APPLICATION_XML,
+                'Content-Type': media_types.APPLICATION_JSON,
                 DEBUG_HEADER_NAME: 'true'
             })
 
@@ -415,75 +404,56 @@ class DebugTransform(OutputTransform):
             return b''
 
         start_time = time.time()
-
-        debug_log_data = request_context.get_log_handler().produce_all()
-        debug_log_data.set('code', str(int(self.status_code)))
-        debug_log_data.set('handler-name', request_context.get_handler_name())
-        debug_log_data.set('started', _format_number(self.request._start_time))
-        debug_log_data.set('request-id', request_context.get_request_id())
-        debug_log_data.set('stages-total', _format_number((time.time() - self.request._start_time) * 1000))
-
-        try:
-            debug_log_data.append(E.versions(
-                _pretty_print_json(self.application.get_versions())
-            ))
-        except Exception:
-            debug_log.exception('cannot add version information')
-            debug_log_data.append(E.versions('failed to get version information'))
-
-        try:
-            debug_log_data.append(E.status(
-                _pretty_print_json(self.application.get_current_status())
-            ))
-        except Exception:
-            debug_log.exception('cannot add status information')
-            debug_log_data.append(E.status('failed to get status information'))
-
-        debug_log_data.append(E.request(
-            E.method(self.request.method),
-            _params_to_xml(self.request.uri),
-            _headers_to_xml(self.request.headers),
-            _cookies_to_xml(self.request.headers)
-        ))
-
-        debug_log_data.append(E.response(
-            _headers_to_xml(self.headers),
-            _cookies_to_xml(self.headers)
-        ))
-
         response_buffer = b''.join(self.chunks)
-        original_response = {
-            'buffer': base64.b64encode(response_buffer),
-            'headers': dict(self.headers),
-            'code': int(self.status_code)
+
+        debug_data = {
+            'request_id': request_context.get_request_id(),
+            'handler_name': request_context.get_handler_name(),
+            'start_time': self.request._start_time,
+            'total_time': int((time.time() - self.request._start_time) * 1000),
+            'request': {
+                'method': self.request.method,
+                'query_params': _query_params_to_json(self.request.uri),
+                'headers': _headers_to_json(self.request.headers),
+                'cookies': _cookies_to_json(self.request.headers)
+            },
+            'response': {
+                'headers': _headers_to_json(self.headers),
+                'cookies': _cookies_to_json(self.headers)
+            },
+            'response_size': len(response_buffer),
+            'original_response': {
+                'buffer': to_unicode(base64.b64encode(response_buffer)),
+                'headers': dict(self.headers),
+                'code': int(self.status_code)
+            }
         }
 
-        debug_log_data.append(frontik.xml_util.dict_to_xml(original_response, 'original-response'))
-        debug_log_data.set('response-size', str(len(response_buffer)))
-        debug_log_data.set('generate-time', _format_number((time.time() - start_time) * 1000))
+        try:
+            debug_data['versions'] = self.application.get_versions()
+        except Exception:
+            debug_log.exception('cannot add version information')
+            debug_data['versions'] = 'exception occured: see logs for details'
 
-        for upstream in debug_log_data.xpath('//meta-info/upstream'):
-            upstream.set('color', _string_to_color(upstream.get('name')))
+        try:
+            debug_data['status'] = self.application.get_current_status()
+        except Exception:
+            debug_log.exception('cannot add status information')
+            debug_data['status'] = 'exception occured: see logs for details'
+
+        log_entries = request_context.get_log_handler().produce_all()
+        debug_data['log_entries'] = log_entries
+        debug_data['total_requests'] = len([e for e in log_entries if 'request' in e])
+        debug_data['total_bytes_received'] = sum(e.get('response', {}).get('size', 0) for e in log_entries)
+        debug_data['generation_time'] = int((time.time() - start_time) * 1000)
 
         if not getattr(self.request, '_debug_inherited', False):
             try:
-                transform = etree.XSLT(etree.parse(DEBUG_XSL))
-                log_document = utf8(str(transform(debug_log_data)))
+                return utf8(self._DEBUG_TEMPLATE.render(generate_id=_generate_id, debug_response=debug_data))
             except Exception:
-                debug_log.exception('XSLT debug file error')
+                debug_log.exception('debug template error')
 
-                try:
-                    debug_log.error('XSL error log entries:\n' + '\n'.join(
-                        '{0.filename}:{0.line}:{0.column}\n\t{0.message}'.format(m) for m in transform.error_log
-                    ))
-                except Exception:
-                    pass
-
-                log_document = etree.tostring(debug_log_data, encoding='UTF-8', xml_declaration=True)
-        else:
-            log_document = etree.tostring(debug_log_data, encoding='UTF-8', xml_declaration=True)
-
-        return log_document
+        return utf8(json.dumps(debug_data))
 
 
 class DebugMode:
@@ -504,7 +474,7 @@ class DebugMode:
             self.pass_debug = 'nopass' not in self.mode_values or self.inherited
             self.profile_xslt = 'xslt' in self.mode_values
 
-            request_context.set_log_handler(DebugBufferedHandler(handler.request._start_time))
+            request_context.set_log_handler(DebugHandler(handler.request._start_time))
 
             if self.pass_debug:
                 debug_log.debug('%s header will be passed to all requests', DEBUG_HEADER_NAME)

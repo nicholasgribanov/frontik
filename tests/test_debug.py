@@ -34,10 +34,10 @@ class DebugTestCase(unittest.TestCase):
         extra_output = (
             '&lt;child2&gt;тест&lt;/child2&gt;',
             'юникод\ndebug',
-            '"тест": "value"',
+            '&#34;тест&#34;: &#34;value&#34;',
             'SomeProtobufObject()',
             '&lt;response&gt;some xml&lt;/response&gt;',
-            'document.body.write("Привет")',
+            'document.body.write(&#34;Привет&#34;)',
             'привет charset',
         )
 

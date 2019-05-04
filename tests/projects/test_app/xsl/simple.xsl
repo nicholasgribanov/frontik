@@ -9,6 +9,10 @@
     </xsl:template>
 
     <xsl:template match="ok">
+        <xsl:call-template name="result"/>
+    </xsl:template>
+
+    <xsl:template name="result">
         <h1>ok</h1>
     </xsl:template>
 

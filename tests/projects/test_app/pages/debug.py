@@ -1,6 +1,7 @@
 from lxml.builder import E
 
 from frontik import handler, media_types
+from frontik.http_client import Server
 
 
 class Page(handler.PageHandler):
@@ -28,18 +29,22 @@ class Page(handler.PageHandler):
         self.put_url(self.request.host, self.request.path + '?type=protobuf')
         self.put_url(self.request.host, self.request.path + '?type=xml')
         self.put_url(self.request.host, self.request.path + '?type=javascript')
-        self.put_url(self.request.host, self.request.path + '?type=text')
+
+        self.application.http_client_factory.register_upstream('upstream', {}, [Server(self.request.host)])
+        self.put_url('upstream', self.request.path + '?type=text')
 
         if self.get_argument('no_recursion', 'false') != 'true':
             self.log.debug('testing complex inherited debug')
             self.get_url(self.request.host, self.request.path + '?no_recursion=true&debug=xslt')
         else:
             self.log.debug('testing xslt profiling')
+            self.doc.put(E.ok())
             self.set_xsl('simple.xsl')
 
         self.log.debug('testing xml output', extra={'_xml': E.root(E.child1(param='тест'), E.child2('тест'))})
         self.log.debug('testing utf-8 text output', extra={'_text': 'some\nmultiline\nюникод\ndebug'})
         self.log.debug('testing unicode text output', extra={'_text': 'some\nmultiline\nюникод\ndebug'})
+        self.log.debug('testing protobuf output', extra={'_protobuf': object()})
 
     async def post_page(self):
         self.log.debug('this page returns json')

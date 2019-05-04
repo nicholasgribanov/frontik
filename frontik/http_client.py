@@ -705,8 +705,8 @@ class HttpClient:
             if response.headers.get(DEBUG_HEADER_NAME):
                 debug_response = response_from_debug(request, response)
                 if debug_response is not None:
-                    debug_xml, response = debug_response
-                    debug_extra['_debug_response'] = debug_xml
+                    debug_json, response = debug_response
+                    debug_extra['_debug_response'] = debug_json
 
             if self.debug_mode.enabled:
                 debug_extra.update({
@@ -737,8 +737,9 @@ class HttpClient:
         log_method(log_message, extra=debug_extra)
 
         if response.code == 599:
-            timings_info = ('{}={}ms'.format(stage, int(timing * 1000)) for stage, timing in response.time_info.items())
-            http_client_logger.info('Curl timings: %s', ' '.join(timings_info))
+            timings_info = ['{}={}ms'.format(stage, int(timing * 1000)) for stage, timing in response.time_info.items()]
+            if timings_info:
+                http_client_logger.info('Curl timings: %s', ' '.join(timings_info))
 
         self.statsd_client.stack()
         self.statsd_client.count(

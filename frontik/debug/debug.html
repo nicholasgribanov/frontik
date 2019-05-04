@@ -1,0 +1,395 @@
+<html>
+<head>
+    {% include "debug-css.html" %}
+    {% include "highlight-css.html" %}
+    {% include "vkbeautify-js.html" %}
+    {% include "debug-js.html" %}
+    {% include "highlight-js.html" %}
+    <meta charset="utf-8"/>
+</head>
+<body>
+    {% set start_time = debug_response.start_time %}
+    {% set total_time = debug_response.total_time %}
+
+    {% macro debug(debug_response, inherited=True) -%}
+        <div class="entry entry_title">
+            request id: {{ debug_response.request_id }},
+            handler: {{ debug_response.handler_name }},
+            code: {{ debug_response.original_response.code }}<br/>
+            requests: {{ debug_response.total_requests }},
+            bytes received: {{ debug_response.total_bytes_received }},
+            bytes produced: {{ debug_response.response_size }}<br/>
+            page generated in: {{ debug_response.total_time }} ms,
+            debug generated in: {{ debug_response.generation_time }} ms
+        </div>
+
+        <div class="entry entry_expandable">
+            {% set block_id = generate_id() %}
+
+            <label for="details_{{ block_id }}" class="entry__head entry__switcher">
+                <span class="entry__head__expandtext">Version info</span>
+            </label>
+            <input type="checkbox" class="details-expander" id="details_{{ block_id }}"/>
+            <div class="details">
+                {{ highlighted_block(debug_response.versions|tojson(indent=4), 'json') }}
+            </div>
+        </div>
+
+        <div class="entry entry_expandable">
+            {% set block_id = generate_id() %}
+
+            <label for="details_{{ block_id }}" class="entry__head entry__switcher">
+                <span class="entry__head__expandtext">Status info</span>
+            </label>
+            <input type="checkbox" class="details-expander" id="details_{{ block_id }}"/>
+            <div class="details">
+                {{ highlighted_block(debug_response.status|tojson(indent=4), 'json') }}
+            </div>
+        </div>
+
+        <div class="entry entry_expandable">
+            {% set block_id = generate_id() %}
+
+            <label for="details_{{ block_id }}" class="entry__head entry__switcher">
+                <span class="entry__head__expandtext">General request/response info</span>
+            </label>
+            <input type="checkbox" class="details-expander" id="details_{{ block_id }}"/>
+            <div class="details">
+                {{ query_params(debug_response.request.query_params) }}
+                {{ headers(debug_response.request.headers, 'request') }}
+                {{ cookies(debug_response.request.cookies, 'request') }}
+                {{ body(debug_response.request.body, 'request') }}
+
+                {{ error(debug_response.response.error) }}
+                {{ headers(debug_response.response.headers, 'response') }}
+                {{ cookies(debug_response.response.cookies, 'response') }}
+            </div>
+        </div>
+
+        {% for log_entry in debug_response.log_entries %}
+            {% if log_entry.xslt_profile is defined %}
+                {{ xslt_profile(log_entry.xslt_profile) }}
+            {% elif log_entry.datasource_query is defined %}
+                {{ datasource_query(log_entry) }}
+            {% elif log_entry.text is defined %}
+                {{ text(log_entry.text, log_entry.msg, type=None) }}
+            {% elif log_entry.xml is defined %}
+                {{ text(log_entry.xml, log_entry.msg, type='xml') }}
+            {% elif log_entry.protobuf is defined %}
+                {{ text(log_entry.protobuf, log_entry.msg, type=None) }}
+            {% elif log_entry.response %}
+                {% set is_error = log_entry.response.code < 200 or log_entry.response.code >= 300 or log_entry.response.error or log_entry.exception %}
+                {% set timebar_offset_time = (log_entry.request.start_time - start_time) * 1000 %}
+                {% set timebar_offset = 100 * timebar_offset_time / total_time %}
+                {% set timebar_length = 100 * log_entry.response.request_time / total_time %}
+                {% set timebar_text_direction = 'rtl' if timebar_offset < 0.5 else 'ltr' %}
+                {% set has_inherited_debug = log_entry.debug_response is defined %}
+                {% set block_id = generate_id() %}
+
+                <div class="entry entry_expandable">
+                    <label for="details_{{ block_id }}" class="entry__head entry__switcher {% if is_error %}error{% endif %}">
+                        <div class="timebar">
+                            <div class="timebar__line" style="left: {{ timebar_offset }}%">
+                                <strong class="timebar__head {% if is_error %}timebar__head_error{% endif %}" style="width: {{ timebar_length }}%"></strong>
+                            </div>
+                        </div>
+
+                        <span class="entry__head__expandtext">
+                            <span class="time">{{ log_entry.response.request_time|round(2) }} ms </span>
+                            {% if log_entry.balanced_request.upstream is defined %}
+                                <span class="label" style="background-color: {{ log_entry.balanced_request.upstream.color }}">
+                                    {{ log_entry.balanced_request.upstream.name }}
+                                </span>
+                                {{ log_entry.balanced_request.upstream.server.rack }}.{{ log_entry.balanced_request.upstream.server.datacenter }}
+                            {% endif %}
+                            {% if log_entry.balanced_request.retry is defined %}
+                                <span class="label retry">RETRY {{ log_entry.balanced_request.upstream.retry }}</span>
+                            {% endif %}
+                            {{ log_entry.response.code }} {{ log_entry.request.method }} {{ (log_entry.response.size / 1024)|round(2) }} Kb
+                            {{ log_entry.request.url }}
+                        </span>
+                    </label>
+                    <input type="checkbox" class="details-expander" id="details_{{ block_id }}"/>
+                    <div class="details entry__details">
+                        {% if log_entry.debug_response is defined %}
+                            <div class="debug-inheritance"></div>
+                        {% endif %}
+
+                        <div class="timebar-details">
+                            <div class="timebar__line" style="left: {{ timebar_offset }}%; direction: {{ timebar_text_direction }}; width: {{ timebar_length }}%">
+                                {{ timebar_offset_time|round(2) }} ms ⇒ {{ (timebar_offset_time + log_entry.response.request_time)|round(2) }} ms : {{ timebar_length|round(2) }}%
+                            </div>
+                        </div>
+
+                        <div class="params">
+                            {% set block_id = generate_id() %}
+
+                            <label for="details_{{ block_id }}" class="delimiter params-link">copy as cURL</label>
+                            <input type="checkbox" class="details-expander" id="details_{{ block_id }}"/>
+                            <div class="details">{{ highlighted_block(log_entry.request.curl, 'bash') }}</div>
+                        </div>
+
+                        {% if log_entry.response.time_info %}
+                            <div class="params">
+                                {% set block_id = generate_id() %}
+
+                                <label for="details_{{ block_id }}" class="delimiter params-link">pycurl time info</label>
+                                <input type="checkbox" class="details-expander" id="details_{{ block_id }}"/>
+                                <div class="details params-info">
+                                    {% for name, time in log_entry.response.time_info.items() %}
+                                        <div>{{ name }}: {{ time }}</div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        {% endif %}
+
+                        {% if log_entry.balanced_request.upstream is defined %}
+                            <div class="params">
+                                {% set block_id = generate_id() %}
+
+                                <label for="details_{{ block_id }}" class="delimiter params-link">server info</label>
+                                <input type="checkbox" class="details-expander" id="details_{{ block_id }}"/>
+                                <div class="details params-info">
+                                    <div>datacenter: {{ log_entry.balanced_request.upstream.server.datacenter }}</div>
+                                    <div>rack: {{ log_entry.balanced_request.upstream.server.rack }}</div>
+                                </div>
+                            </div>
+                        {% endif %}
+
+                        {% if log_entry.debug_response is defined %}
+                            <div class="debug-inherited">
+                                {{ debug(log_entry.debug_response, inherited=True) }}
+                            </div>
+                        {% endif %}
+
+                        {% if log_entry.debug_response is undefined %}
+                            {{ query_params(log_entry.request.query_params) }}
+                            {{ headers(log_entry.request.headers, 'request') }}
+                            {{ cookies(log_entry.request.cookies, 'request') }}
+                            {{ body(log_entry.request.body, 'request') }}
+
+                            {{ error(log_entry.response.error) }}
+                            {{ headers(log_entry.response.headers, 'response') }}
+                            {{ cookies(log_entry.response.cookies, 'response') }}
+                        {% endif %}
+
+                        {{ body(log_entry.response.body, 'response') }}
+                        {% if log_entry.exception is defined %}
+                            {{ exception(log_entry.exception) }}
+                        {% endif %}
+                    </div>
+                </div>
+            {% else %}
+                <div class="entry">
+                    <div class="entry__head {{ log_entry.levelname }}">
+                        <span class="entry__head__message">{{ log_entry.msg }}</span>
+                    </div>
+                </div>
+                {% if log_entry.exception is defined %}
+                    {{ exception(log_entry.exception) }}
+                {% endif %}
+            {% endif %}
+        {% endfor %}
+    {%- endmacro %}
+
+    {% macro query_params(params) %}
+        {% if params %}
+            <div class="params">
+                <div class="delimiter">request params</div>
+                {% for param in params %}
+                    <div>{{ param[0] }} = {{ param[1] }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endmacro %}
+
+    {% macro headers(headers, source) %}
+        {% if headers %}
+            <div class="headers">
+                <div class="delimiter">{{ source }} headers</div>
+                {% for header in headers %}
+                    <div>{{ header[0] }}: {{ header[1] }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endmacro %}
+
+    {% macro cookies(cookies, source) %}
+        {% if cookies %}
+            <div class="cookies">
+                <div class="delimiter">{{ source }} cookies</div>
+                {% for cookie in cookies %}
+                    <div>{{ cookie[0] }} = {{ cookie[1] }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endmacro %}
+
+    {% macro error(error) %}
+        {% if error %}
+            <div class="delimiter">error code</div>
+            <div class="error">{{ error }}</div>
+        {% endif %}
+    {% endmacro %}
+
+    {% macro body(body, source) %}
+        {% if body is mapping %}
+            <div class="params">
+                <div class="delimiter">{{ source }} body</div>
+                {% for param in body %}
+                    <div>{{ param[0] }} = {{ param[1] }}</div>
+                {% endfor %}
+            </div>
+        {% elif body %}
+            <div class="delimiter">{{ source }} body</div>
+            {{ highlighted_block(body) }}
+        {% elif source == 'response' %}
+            <div class="delimiter">{{ source }} body</div>
+            Empty response
+        {% endif %}
+    {% endmacro %}
+
+    {% macro highlighted_block(text, type=None) -%}
+        <pre class="body"><code class="{% if type %}{{ type }} highlighted-code{% endif %}{% if type == 'python' %} no-overflow{% endif %}">{{ text }}</code></pre>
+    {%- endmacro %}
+
+    {% macro datasource_query(log_entry) %}
+        {% set block_id = generate_id() %}
+
+        <div class="entry entry_expandable">
+            <label for="details_{{ block_id }}" class="entry__head entry__switcher">
+                <span class="entry__head__expandtext">
+                    <span class="time">{{ log_entry.duration }} ms </span>
+                    <span class="label type">{{ log_entry.type }} </span>
+                    <span class="label">{{ log_entry.info }} </span>
+                     at {{ log_entry.pathname }}.{{ log_entry.funcName }}({{ log_entry.filename }}:{{ log_entry.lineno }})
+                </span>
+            </label>
+            <input type="checkbox" class="details-expander" id="details_{{ block_id }}"/>
+            <div class="details">
+                {{ highlighted_block(log_entry.msg, 'sql') }}
+            </div>
+        </div>
+
+        {% if log_entry.exception is defined %}
+            {{ exception(log_entry.exception) }}
+        {% endif %}
+    {% endmacro %}
+
+    {% macro text(text, msg, type) %}
+        {% set block_id = generate_id() %}
+
+        <div class="entry entry_expandable">
+            <label for="details_{{ block_id }}" class="entry__head entry__switcher">
+                <span class="entry__head__expandtext">{{ msg }}</span>
+            </label>
+            <input type="checkbox" class="details-expander" id="details_{{ block_id }}"/>
+            <div class="details">
+                {{ highlighted_block(text, type) }}
+            </div>
+        </div>
+    {% endmacro %}
+
+    {% macro exception(exception) %}
+        <div class="entry"><pre class="exception">{{ exception.text }}</pre></div>
+        {% if exception.trace is defined %}
+            {% set block_id = generate_id() %}
+
+            <div class="entry entry_expandable">
+                <label for="details_{{ block_id }}" class="entry__head entry__switcher">
+                    <span class="entry__head__expandtext">Exception traceback</span>
+                </label>
+                <input type="checkbox" class="details-expander" id="details_{{ block_id }}"/>
+                <div class="details">
+                    {% for trace_step in exception.trace %}
+                        {% set block_id = generate_id() %}
+                        <pre class="trace-file">{{ trace_step.file }}</pre>
+                        <div class="entry entry_expandable trace-locals">
+                            <label for="details_{{ block_id }}" class="entry__head entry__switcher">
+                                <span class="entry__head__expandtext trace-locals__caption">Show/hide locals</span>
+                            </label>
+                            <input type="checkbox" class="details-expander" id="details_{{ block_id }}"/>
+                            <div class="details">
+                                <pre class="trace-locals__text">{{ highlighted_block(trace_step.locals, 'python') }}</pre>
+                            </div>
+                        </div>
+                        <table class="trace-lines">
+                            <tr>
+                                {% if not trace_step.lines %}
+                                    <td>Unable to find source file</td>
+                                {% else %}
+                                    <td class="trace-lines__column">
+                                        {% for line in trace_step.lines %}
+                                            <span class="trace-lines__line {% if line.selected %}selected{% endif %}">
+                                                {{ highlighted_block(line.number, 'python') }}
+                                            </span>
+                                        {% endfor %}
+                                    </td>
+                                    <td class="trace-lines__column">
+                                        {% for line in trace_step.lines %}
+                                            <span class="trace-lines__line {% if line.selected %}selected{% endif %}">
+                                                {{ highlighted_block(line.text, 'python') }}
+                                            </span>
+                                        {% endfor %}
+                                    </td>
+                                {% endif %}
+                            </tr>
+                        </table>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+    {% endmacro %}
+
+    {% macro xslt_profile(profile) %}
+        {% set block_id = generate_id() %}
+
+        <div class="entry entry_expandable">
+            <label for="details_{{ block_id }}" class="entry__head entry__switcher">
+                <span class="entry__head__expandtext">XSLT profiling results</span>
+            </label>
+            <input type="checkbox" class="details-expander" id="details_{{ block_id }}"/>
+            <div class="details">
+                <table class="xslt-profile">
+                    <thead>
+                        <tr>
+                            <th class="xslt-profile-header">
+                                template
+                            </th>
+                            <th class="xslt-profile-header xslt-profile-header__sortable" onclick="sortTableColumn(this)" title="Sort by calls">
+                                calls
+                            </th>
+                            <th class="xslt-profile-header xslt-profile-header__sortable" onclick="sortTableColumn(this)" title="Sort by total time">
+                                total time, ms (sum: {{ profile.total_time }})
+                            </th>
+                            <th class="xslt-profile-header xslt-profile-header__sortable" onclick="sortTableColumn(this)" title="Sort by average time">
+                                average time, ms
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for tpl in profile.templates %}
+                            <tr class="xslt-profile-row">
+                                <td class="xslt-profile-item xslt-profile-item__text">
+                                    match={{ tpl.match }} name={{ tpl.name }} mode={{ tpl.mode }}
+                                </td>
+                                <td class="xslt-profile-item xslt-profile-item__number">
+                                    {{ tpl.calls }}
+                                </td>
+                                <td class="xslt-profile-item xslt-profile-item__number">
+                                    {{ tpl.time }}
+                                </td>
+                                <td class="xslt-profile-item xslt-profile-item__number">
+                                    {{ tpl.average }}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% endmacro %}
+
+    {{ debug(debug_response, inherited=False) }}
+</body>
+</html>

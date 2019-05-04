@@ -35,11 +35,11 @@ class TestJinja(unittest.TestCase):
         self.assertEqual(response.status_code, 500)
 
         debug_response = frontik_test_app.get_page('json_page?template_error=true&debug')
-        self.assertIn(b"'req1' is undefined", debug_response.content)
+        self.assertIn(b"&#39;req1&#39; is undefined", debug_response.content)
 
     def test_jinja_template_syntax_error(self):
         response = frontik_test_app.get_page('json_page?template=jinja-syntax-error.html')
         self.assertEqual(response.status_code, 500)
 
         debug_response = frontik_test_app.get_page('json_page?template=jinja-syntax-error.html&debug')
-        self.assertIn(b"unexpected '}'", debug_response.content)
+        self.assertIn(b"unexpected &#39;}&#39;", debug_response.content)

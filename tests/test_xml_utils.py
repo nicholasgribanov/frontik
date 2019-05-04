@@ -5,7 +5,7 @@ from lxml import etree
 from lxml_asserts.testcase import LxmlTestCaseMixin
 from tornado.testing import ExpectLog
 
-from frontik.xml_util import dict_to_xml, xml_from_file, xml_to_dict
+from frontik.xml_util import xml_from_file
 
 XML = etree.XML('''
     <root>
@@ -62,13 +62,6 @@ DICT_AFTER = {
 
 
 class TestXmlUtils(unittest.TestCase, LxmlTestCaseMixin):
-    def test_xml_to_dict_and_back_again(self):
-        self.assertEqual(xml_to_dict(XML), DICT_AFTER)
-        self.assertXmlEqual(dict_to_xml(DICT_BEFORE, 'root'), XML)
-
-        self.assertEqual(xml_to_dict(dict_to_xml(DICT_BEFORE, 'root')), DICT_AFTER)
-        self.assertXmlEqual(dict_to_xml(xml_to_dict(XML), 'root'), XML)
-
     XML_FILE = os.path.join(os.path.dirname(__file__), 'projects', 'test_app', 'xml', 'aaa.xml')
     XML_MISSING_FILE = os.path.join(os.path.dirname(__file__), 'bbb.xml')
     XML_SYNTAX_ERROR_FILE = os.path.join(os.path.dirname(__file__), 'projects', 'test_app', 'xsl', 'syntax_error.xsl')
