@@ -172,5 +172,5 @@ class FrontikApplication(Application):
     def get_kafka_producer(self, producer_name: str) -> 'Optional[AIOKafkaProducer]':  # pragma: no cover
         pass
 
-    def get_sentry_logger(self, request: 'HTTPServerRequest') -> 'Optional[SentryLogger]':  # pragma: no cover
+    def get_sentry_logger(self, request: 'HTTPServerRequest', function) -> 'Optional[SentryLogger]':  # pragma: no cover
         pass

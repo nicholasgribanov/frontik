@@ -1,24 +1,35 @@
+from datetime import timedelta
 from functools import partial
 
-from tornado.ioloop import IOLoop
 from tornado.web import HTTPError
 
 from frontik.handler import PageHandler
+from frontik.integrations.sentry import SentryLogger
 
 
 class Page(PageHandler):
     async def get_page(self):
-        raise Exception('Runtime exception for Sentry')
+        action = self.get_argument('action')
 
-    async def post_page(self):
-        raise HTTPError(500, 'HTTPError for Sentry')
+        if action == 'exception':
+            raise Exception('Runtime exception for Sentry')
 
-    async def put_page(self):
-        self.get_sentry_logger().capture_message('Message for Sentry')
+        if action == 'http_error':
+            raise HTTPError(500, 'HTTPError for Sentry')
+
+        if action == 'message':
+            self.get_sentry_logger().user['ip_address'] = '123.0.1.1'
+            self.get_sentry_logger().capture_message('Message for Sentry')
+        elif action == 'sample_rate':
+            self.get_sentry_logger().extra['sample_rate'] = 0
+            self.get_sentry_logger().capture_message('Sampled message')
+        elif action == 'bad_sample_rate':
+            self.get_sentry_logger().extra['sample_rate'] = 'bad'
+            self.get_sentry_logger().capture_message('Sampled message')
 
     def finish(self, chunk=None):
         # delay page finish to make sure that sentry mock got the exception
-        self.add_timeout(IOLoop.current().time() + 0.3, partial(super().finish, chunk))
+        self.add_timeout(timedelta(milliseconds=300), partial(super().finish, chunk))
 
-    def initialize_sentry_logger(self, sentry_logger):
-        sentry_logger.update_user_info(user_id='123456')
+    def initialize_sentry_logger(self, sentry_logger: SentryLogger):
+        sentry_logger.user = {'id': '123456'}

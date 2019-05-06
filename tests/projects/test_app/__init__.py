@@ -5,10 +5,12 @@ from frontik.app import FrontikApplication
 from frontik.loggers import bootstrap_logger
 from frontik.options import options
 
+from .pages.sentry import api
+
 
 class TestApplication(FrontikApplication):
     def __init__(self, **settings):
-        options.sentry_dsn = 'http://key:secret@127.0.0.1:{}/sentry'.format(settings['port'])
+        options.sentry_dsn = 'http://key@127.0.0.1:{}/123'.format(settings['port'])
 
         bootstrap_logger('custom_logger', logging.DEBUG, False)
 
@@ -23,6 +25,9 @@ class TestApplication(FrontikApplication):
 
     def application_version(self):
         return 'last version'
+
+    def application_urls(self):
+        return [(r'/api/\d+/store', api.Page)] + super().application_urls()
 
 
 class TestKafkaProducer:

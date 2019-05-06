@@ -1,32 +1,64 @@
+import asyncio
+import json
+import logging
+import random
 from asyncio import Future
-from typing import Optional
+from datetime import datetime, timedelta
+from typing import Any, Dict, Optional, Tuple, Type, Union, TYPE_CHECKING
 
-from raven.contrib.tornado import AsyncSentryClient
+from sentry_sdk.client import Client
+from sentry_sdk.hub import Hub
+from sentry_sdk.integrations.tornado import TornadoRequestExtractor
+from sentry_sdk.scope import Scope
+from sentry_sdk.transport import Transport
+from sentry_sdk.utils import Auth, transaction_from_function
+from tornado.httpclient import AsyncHTTPClient
 from tornado.web import HTTPError
 
-from frontik.options import options
-from frontik.http_client import FailFastError
+from frontik import media_types
 from frontik.integrations import Integration, integrations_logger
+from frontik.handler import PageHandler
+from frontik.http_client import FailFastError
+from frontik.options import options
+
+if TYPE_CHECKING:  # pragma: no cover
+    from typing import Callable
+
+    from sentry_sdk.consts import ClientOptions
+    from tornado.httputil import HTTPServerRequest
+
+    from frontik.app import FrontikApplication
+
+    ExcInfo = Tuple[
+        Optional[Type[BaseException]], Optional[BaseException], Optional[Any]
+    ]
+
+sentry_logger = logging.getLogger('sentry_logger')
 
 
 class SentryIntegration(Integration):
     def __init__(self):
         self.sentry_client = None
 
-    def initialize_app(self, app) -> Optional[Future]:
+    def initialize_app(self, app: 'FrontikApplication') -> Optional[Future]:
         if not options.sentry_dsn:
             integrations_logger.info('sentry integration is disabled: sentry_dsn option is not configured')
             return None
 
-        self.sentry_client = FrontikAsyncSentryClient(
-            dsn=options.sentry_dsn, http_client=app.http_client_factory.tornado_http_client,
+        self.sentry_client = Client(
+            dsn=options.sentry_dsn,
+            max_breadcrumbs=0,
             release=app.application_version(),
-            # breadcrumbs have serious performance penalties
-            enable_breadcrumbs=False, install_logging_hook=False, install_sys_hook=False
+            default_integrations=False,
+            transport=FrontikTransport,
+            before_send=FrontikTransport.before_send,
+            attach_stacktrace=True
         )
 
-        def get_sentry_logger(request):
-            return SentryLogger(self.sentry_client, request)
+        self.sentry_client.transport.prepare(app)
+
+        def get_sentry_logger(request, function):
+            return SentryLogger(request, function, self.sentry_client)
 
         app.get_sentry_logger = get_sentry_logger
 
@@ -38,7 +70,9 @@ class SentryIntegration(Integration):
 
         def get_sentry_logger():
             if not hasattr(handler, 'sentry_logger'):
-                handler.sentry_logger = handler.application.get_sentry_logger(handler.request)
+                handler.sentry_logger = handler.application.get_sentry_logger(
+                    handler.request, getattr(handler, f'{handler.request.method.lower()}_page', None)
+                )
                 if hasattr(handler, 'initialize_sentry_logger'):
                     handler.initialize_sentry_logger(handler.sentry_logger)
 
@@ -49,96 +83,117 @@ class SentryIntegration(Integration):
             if isinstance(value, (HTTPError, FailFastError)):
                 return
 
-            handler.get_sentry_logger().capture_exception(exc_info=(typ, value, tb))
+            handler.get_sentry_logger().capture_exception((typ, value, tb))
 
         handler.get_sentry_logger = get_sentry_logger
         handler.register_exception_hook(log_exception_to_sentry)
 
 
-class FrontikAsyncSentryClient(AsyncSentryClient):
-    def __init__(self, *args, http_client=None, **kwargs):
-        self.http_client = http_client
-        super().__init__(*args, **kwargs)
+class FrontikTransport(Transport):
+    def __init__(self, options: 'ClientOptions'):
+        super().__init__(options)
 
-    def _send_remote(self, url, data, headers=None, callback=None):
-        """
-        Initialise a Tornado AsyncClient and send the request to the sentry
-        server. If the callback is a callable, it will be called with the
-        response.
-        """
-        return self.http_client.fetch(
-            url, callback, method='POST', body=data, headers=headers if headers else {},
-            validate_cert=self.validate_cert, connect_timeout=options.http_client_default_connect_timeout_sec,
-            request_timeout=options.http_client_default_request_timeout_sec
+        self._disabled_until = None  # type: Optional[datetime]
+        self._auth = None  # type: Optional[Auth]
+        self._http_client = None  # type: Optional[AsyncHTTPClient]
+
+    def prepare(self, app: 'FrontikApplication'):
+        self._auth = self.parsed_dsn.to_auth(app.app)
+        self._http_client = app.http_client_factory.tornado_http_client
+
+    def capture_event(self, event: Dict[str, Any]) -> None:
+        if self._disabled_until is not None:
+            if datetime.utcnow() < self._disabled_until:
+                return
+            self._disabled_until = None
+
+        asyncio.get_event_loop().create_task(self._send_event(event))
+
+    @staticmethod
+    def before_send(event: Dict[str, Any], hint: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        try:
+            sample_rate = float(event.get('extra', {}).get('sample_rate', 1.0))
+            if sample_rate < 1.0 and random.random() >= sample_rate:
+                return None
+        except Exception:
+            sentry_logger.error('exception %s while sending event to Sentry (before_send)')
+
+        return event
+
+    async def _send_event(self, event: Dict[str, Any]):
+        response = await self._http_client.fetch(
+            self._auth.store_api_url,
+            raise_error=False,
+            method='POST', body=json.dumps(event, allow_nan=False),
+            headers={
+                'x-sentry-auth': str(self._auth.to_header()),
+                'content-type': media_types.APPLICATION_JSON,
+            }
         )
+
+        if response.code == 429:
+            sentry_logger.error('got %s from sentry, enabling backoff', response.code)
+            self._disabled_until = datetime.utcnow() + timedelta(seconds=10)
+        elif response.error:
+            sentry_logger.error('got %s from sentry', response.code)
 
 
 class SentryLogger:
-    def __init__(self, sentry_client, request):
-        """
-        :type request: tornado.httpserver.HTTPRequest
-        :type sentry_client: frontik.sentry.AsyncSentryClient
-        """
+    def __init__(self, request: 'HTTPServerRequest', function: 'Optional[Callable]', sentry_client: Client):
         self.sentry_client = sentry_client
         self.request = request
-        self.request_extra_data = {}
-        self.user_info = {
-            'ip_address': request.remote_ip,
-        }
-        self.url = request.full_url()
+        self._user = {}
+        self._extra = {}
 
-    def set_request_extra_data(self, request_extra_data):
-        """
-        :type request_extra_data: dict
-        :param request_extra_data: extra data to be sent with any exception or message
-        """
-        self.request_extra_data = request_extra_data
+        self._scope = Scope()
+        self._scope.add_event_processor(self._event_processor)
+        self._scope.transaction = transaction_from_function(function)
 
-    def update_user_info(self, user_id=None, ip=None, username=None, email=None):
-        new_data = {
-            'id': user_id,
-            'username': username,
-            'email': email,
-            'ip_address': ip,
-        }
-        new_data = {k: v for k, v in new_data.items() if v is not None}
-        self.user_info.update(new_data)
+    @property
+    def user(self):
+        return self._user
 
-    def capture_exception(self, exc_info=None, extra_data=None, **kwargs):
-        """
-        Additional kwargs passed to raven.base.Client#captureException:
-        """
-        sentry_data = self._collect_sentry_data(extra_data)
-        self.sentry_client.captureException(exc_info=exc_info, data=sentry_data, **kwargs)
+    @user.setter
+    def user(self, user_data):
+        self._user = user_data
 
-    def capture_message(self, message, extra_data=None, **kwargs):
-        """
-        Additional kwargs passed to raven.base.Client#captureMessage:
-        """
-        sentry_data = self._collect_sentry_data(extra_data)
-        self.sentry_client.captureMessage(message, data=sentry_data, **kwargs)
+    @property
+    def extra(self):
+        return self._extra
 
-    def _collect_sentry_data(self, extra_data):
-        data = {
-            # url and method are required
-            # see http://sentry.readthedocs.org/en/latest/developer/interfaces/#sentry.interfaces.http.Http
-            'request': {
-                'url': self.url,
-                'method': self.request.method,
-                'data': self.request.body,
-                'query_string': self.request.query,
-                'cookies': self.request.headers.get('Cookie', None),
-                'headers': dict(self.request.headers),
-            },
+    @extra.setter
+    def extra(self, extra_data):
+        self._extra = extra_data
 
-            # either user id or ip_address is required
-            # see http://sentry.readthedocs.org/en/latest/developer/interfaces/#sentry.interfaces.user.User
-            'user': self.user_info,
+    def capture_exception(self, error: Optional[Union[BaseException, 'ExcInfo']] = None) -> Optional[str]:
+        self._update_scope()
 
-            'extra': {}
-        }
-        if extra_data:
-            data['extra']['extra_data'] = extra_data
-        if self.request_extra_data:
-            data['extra']['request_extra_data'] = self.request_extra_data
-        return data
+        with Hub(self.sentry_client, self._scope) as hub:
+            return hub.capture_exception(error)
+
+    def capture_message(self, message: str, level: Optional[str] = None) -> Optional[str]:
+        self._update_scope()
+
+        with Hub(self.sentry_client, self._scope) as hub:
+            return hub.capture_message(message, level)
+
+    def _update_scope(self):
+        self._scope.user = self._user
+        for k, v in self._extra.items():
+            self._scope.set_extra(k, v)
+
+    def _event_processor(self, event: Dict[str, Any], hint: Dict[str, Any]) -> Dict[str, Any]:
+        extractor = TornadoRequestExtractor(self.request)
+        extractor.extract_into_event(event)
+
+        request_info = event['request']
+        request_info['url'] = f'{self.request.protocol}://{self.request.host}{self.request.path}'
+        request_info['query_string'] = self.request.query
+        request_info['method'] = self.request.method
+        request_info['env'] = {'REMOTE_ADDR': self.request.remote_ip}
+        request_info['headers'] = dict(self.request.headers)
+
+        if event.get('user', {}).get('ip_address') is None:
+            event.setdefault('user')['ip_address'] = self.request.remote_ip
+
+        return event

@@ -1,4 +1,3 @@
-import logging
 import unittest
 
 import requests
@@ -15,46 +14,76 @@ from .instances import frontik_re_app, frontik_test_app
 @unittest.skipIf(not has_raven, 'raven library not found')
 class TestSentryIntegration(unittest.TestCase):
     def test_sentry_exception(self):
-        frontik_test_app.get_page('api/sentry/store', method=requests.delete)
-        frontik_test_app.get_page('sentry_error')
+        frontik_test_app.get_page('api/123/store', method=requests.delete)
+        frontik_test_app.get_page('sentry_error?action=exception')
 
-        for exception in self._get_sentry_messages():
-            if exception['message'] == 'Exception: Runtime exception for Sentry':
-                self.assertEqual(logging.ERROR, exception['level'])
-                self.assertIn('/sentry_error', exception['request']['url'])
-                self.assertEqual('123456', exception['user']['id'])
-                break
-        else:
-            self.fail('Exception not sent to Sentry')
+        exception = self._find_sentry_exception('Runtime exception for Sentry')
+        self.assertEqual('error', exception['level'])
+        self.assertIn('/sentry_error', exception['request']['url'])
+        self.assertEqual('123456', exception['user']['id'])
 
     def test_sentry_message(self):
-        frontik_test_app.get_page('api/sentry/store', method=requests.delete)
-        frontik_test_app.get_page('sentry_error', method=requests.put)
+        frontik_test_app.get_page('api/123/store', method=requests.delete)
+        frontik_test_app.get_page('sentry_error?action=message')
 
-        for exception in self._get_sentry_messages():
-            if exception['message'] == 'Message for Sentry':
-                self.assertEqual(logging.ERROR, exception['level'])
-                self.assertEqual('PUT', exception['request']['method'])
-                self.assertIn('/sentry_error', exception['request']['url'])
-                self.assertEqual('123456', exception['user']['id'])
-                break
-            else:
-                self.fail(exception)
-        else:
-            self.fail('Message not sent to Sentry')
+        message = self._find_sentry_message('Message for Sentry')
+        self.assertEqual('info', message['level'])
+        self.assertEqual('tests.projects.test_app.pages.sentry_error.Page.get_page', message['transaction'])
+        self.assertEqual('GET', message['request']['method'])
+        self.assertEqual('last version', message['release'])
+        self.assertIn('/sentry_error', message['request']['url'])
+        self.assertEqual('123456', message['user']['id'])
 
     def test_sentry_http_error(self):
-        frontik_test_app.get_page('api/sentry/store', method=requests.delete)
-        frontik_test_app.get_page('sentry_error', method=requests.post)
+        frontik_test_app.get_page('api/123/store', method=requests.delete)
+        frontik_test_app.get_page('sentry_error?action=http_error')
 
-        for exception in self._get_sentry_messages():
-            if 'HTTPError for Sentry' in exception['message']:
-                self.fail('HTTPError must not be sent to Sentry')
+        sentry_json = frontik_test_app.get_page_json('api/123/store')
+        self.assertEqual({'exceptions': []}, sentry_json)
+
+    def test_sentry_sample_rate(self):
+        frontik_test_app.get_page('api/123/store', method=requests.delete)
+        frontik_test_app.get_page('sentry_error?action=sample_rate')
+
+        sentry_json = frontik_test_app.get_page_json('api/123/store')
+        self.assertEqual({'exceptions': []}, sentry_json)
+
+    def test_sentry_bad_sample_rate(self):
+        frontik_test_app.get_page('api/123/store', method=requests.delete)
+        frontik_test_app.get_page('sentry_error?action=bad_sample_rate')
+
+        exception = self._find_sentry_message('Sampled message')
+        self.assertIsNotNone(exception)
+
+    def test_sentry_429(self):
+        frontik_test_app.get_page('api/123/store', method=requests.delete)
+        frontik_test_app.get_page('api/123/store?set_code=429', method=requests.post)
+
+        frontik_test_app.get_page('sentry_error?action=message')
+        sentry_json = frontik_test_app.get_page_json('api/123/store')
+        self.assertEqual({'exceptions': []}, sentry_json)
+
+        frontik_test_app.get_page('sentry_error?action=message')
+        sentry_json = frontik_test_app.get_page_json('api/123/store')
+        self.assertEqual({'exceptions': []}, sentry_json)
+
+    def test_sentry_500(self):
+        frontik_test_app.get_page('api/123/store', method=requests.delete)
+        frontik_test_app.get_page('api/123/store?set_code=500', method=requests.post)
+        frontik_test_app.get_page('sentry_error?action=message')
+
+        sentry_json = frontik_test_app.get_page_json('api/123/store')
+        self.assertEqual({'exceptions': []}, sentry_json)
 
     def test_sentry_not_configured(self):
         self.assertEqual(200, frontik_re_app.get_page('sentry_not_configured').status_code)
 
     @staticmethod
-    def _get_sentry_messages():
-        sentry_json = frontik_test_app.get_page_json('api/sentry/store')
-        return sentry_json['exceptions']
+    def _find_sentry_message(message):
+        sentry_json = frontik_test_app.get_page_json('api/123/store')
+        return next((e for e in sentry_json['exceptions'] if e['message'] == message), None)
+
+    @staticmethod
+    def _find_sentry_exception(exception):
+        sentry_json = frontik_test_app.get_page_json('api/123/store')
+        return next((e for e in sentry_json['exceptions'] if e['exception']['values'][-1]['value'] == exception), None)

@@ -71,12 +71,12 @@ def run_server(app: FrontikApplication):
                     slow_tasks_logger.warning('%s took %.2fms', self, delta * 1000)
                 if options.asyncio_task_critical_threshold_sec and delta >= options.asyncio_task_critical_threshold_sec:
                     request = get_request() or HTTPServerRequest('GET', '/asyncio_long_task_stub')
-                    sentry_logger = app.get_sentry_logger(request)
+                    sentry_logger = app.get_sentry_logger(request, None)
                     sentry_logger.update_user_info(ip='127.0.0.1')
 
                     if sentry_logger:
                         slow_tasks_logger.warning('no sentry logger available')
-                        sentry_logger.capture_message(f'{self} took {(delta * 1000):.2f} ms', stack=True)
+                        sentry_logger.capture_message(f'{self} took {(delta * 1000):.2f} ms')
 
             asyncio.Handle._run = run
 

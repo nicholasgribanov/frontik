@@ -53,7 +53,7 @@ setup(
         'https://github.com/hhru/tornado/archive/master.zip',
     ],
     extras_require={
-        'sentry': ['raven'],
+        'sentry': ['sentry-sdk'],
         'kafka': ['aiokafka'],
     },
     zip_safe=False
