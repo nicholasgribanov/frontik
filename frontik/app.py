@@ -1,6 +1,7 @@
 import importlib
 import sys
 import time
+from datetime import datetime
 from functools import partial
 from typing import TYPE_CHECKING
 
@@ -46,11 +47,6 @@ class FrontikApplication(Application):
 
     def __init__(self, **settings):
         self.start_time = time.time()
-
-        tornado_settings = settings.get('tornado_settings')
-        if tornado_settings is None:
-            tornado_settings = {}
-
         self.config = self.application_config()
         self.app = settings.get('app')
         self.app_root = settings.get('app_root')
@@ -69,7 +65,7 @@ class FrontikApplication(Application):
             (r'/version/?', VersionHandler),
             (r'/status/?', StatusHandler),
             (r'.*', self.router),
-        ], **tornado_settings)
+        ], **settings.get('tornado_settings', {}))
 
         self.transforms.insert(0, partial(DebugTransform, self))
 
@@ -135,16 +131,8 @@ class FrontikApplication(Application):
         }
 
     def get_current_status(self):
-        cur_uptime = time.time() - self.start_time
-        if cur_uptime < 60:
-            uptime_value = '{:.2f} seconds'.format(cur_uptime)
-        elif cur_uptime < 3600:
-            uptime_value = '{:.2f} minutes'.format(cur_uptime / 60)
-        else:
-            uptime_value = '{:.2f} hours and {:.2f} minutes'.format(cur_uptime / 3600, (cur_uptime % 3600) / 60)
-
         return {
-            'uptime': uptime_value,
+            'started_at': str(datetime.fromtimestamp(self.start_time)),
             'datacenter': options.datacenter,
         }
 

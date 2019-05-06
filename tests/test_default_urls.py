@@ -19,5 +19,5 @@ class TestDefaultUrls(unittest.TestCase):
         self.assertTrue(response.headers['Content-Type'].startswith('application/json'))
 
         json_response = json.loads(response.content)
-        self.assertIn('uptime', json_response)
+        self.assertIn('started_at', json_response)
         self.assertIn('datacenter', json_response)

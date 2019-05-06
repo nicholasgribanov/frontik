@@ -6,6 +6,7 @@ import signal
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
+from typing import Type
 
 import tornado.autoreload
 import tornado.httpserver
@@ -130,18 +131,22 @@ def main(config_file=None):
 
     try:
         module = importlib.import_module(options.app)
-    except Exception as e:
-        log.exception('failed to import application module "%s": %s', options.app, e)
+    except Exception:
+        log.exception('failed to import application module "%s"', options.app)
         sys.exit(1)
 
-    if options.app_class is not None and not hasattr(module, options.app_class):
-        log.exception('application class "%s" not found', options.app_class)
+    app_class_name = options.app_class
+
+    if app_class_name and not hasattr(module, app_class_name):
+        log.exception('application class "%s" not found', app_class_name)
         sys.exit(1)
 
-    application = getattr(module, options.app_class) if options.app_class is not None else FrontikApplication
+    app_class = (
+        getattr(module, app_class_name) if app_class_name else FrontikApplication  # type: Type[FrontikApplication]
+    )
 
     try:
-        app = application(app_root=os.path.dirname(module.__file__), **options.as_dict())
+        app = app_class(app_root=os.path.dirname(module.__file__), **options.as_dict())
         ioloop = tornado.ioloop.IOLoop.current()
 
         executor = ThreadPoolExecutor(options.common_executor_pool_size)
