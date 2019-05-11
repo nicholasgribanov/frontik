@@ -11,4 +11,4 @@ class Page(JsonPageHandler):
         if self.get_argument('fail_write_error', 'false') == 'true':
             raise Exception('exception in write_error')
 
-        self.finish_with_postprocessors()
+        self.schedule_postprocessors()

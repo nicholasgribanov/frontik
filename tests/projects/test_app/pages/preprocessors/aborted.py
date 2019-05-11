@@ -23,9 +23,9 @@ async def pp(handler):
         handler.json.replace({'custom_error': True})
         raise HTTPErrorWithPostprocessors(400)
     elif handler.get_argument('abort_preprocessors', 'false') != 'false':
-        raise FinishWithPostprocessors(wait_finish_group=True)
+        raise FinishWithPostprocessors(wait_handler=True)
     elif handler.get_argument('abort_preprocessors_nowait', 'false') != 'false':
-        raise FinishWithPostprocessors(wait_finish_group=False)
+        raise FinishWithPostprocessors(wait_handler=False)
     elif handler.get_argument('redirect', 'false') != 'false':
         handler.redirect(handler.request.host + handler.request.path + '?redirected=true')
     elif handler.get_argument('finish', 'false') != 'false':

@@ -38,7 +38,7 @@ class Page(JsonPageHandler):
 
         self.json.replace({'fail_fast': True})
         self.set_status(403)
-        self.finish_with_postprocessors()
+        self.schedule_postprocessors()
 
     async def post_page(self):
         if self.get_argument('fail_fast_default', 'false') == 'true':

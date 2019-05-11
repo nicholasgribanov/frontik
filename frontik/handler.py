@@ -44,9 +44,9 @@ def _fallback_status_code(status_code):
 
 
 class FinishWithPostprocessors(Exception):
-    def __init__(self, wait_finish_group=False):
+    def __init__(self, wait_handler=False):
         super().__init__()
-        self.wait_finish_group = wait_finish_group
+        self.wait_handler = wait_handler
 
 
 class HTTPErrorWithPostprocessors(tornado.web.HTTPError):
@@ -217,12 +217,7 @@ class PageHandler(RequestHandler):
 
             await page_handler_method()
 
-            while self._handler_futures:
-                futures = self._handler_futures[:]
-                self._handler_futures = []
-                await asyncio.gather(*futures)
-
-            self._handler_futures = None
+            await self._wait_handler_futures()
 
             await self._postprocess()
 
@@ -231,6 +226,14 @@ class PageHandler(RequestHandler):
                 self._handle_request_exception(e)
             except Exception:
                 self.log.error('Exception in exception handler', exc_info=True)
+
+    async def _wait_handler_futures(self):
+        while self._handler_futures:
+            futures = self._handler_futures[:]
+            self._handler_futures = []
+            await asyncio.gather(*futures)
+
+        self._handler_futures = None
 
     async def get_page(self):
         """ This method can be implemented in the subclass """
@@ -300,12 +303,8 @@ class PageHandler(RequestHandler):
 
         return wrapper
 
-    def finish_with_postprocessors(self):
+    def schedule_postprocessors(self):
         asyncio.create_task(self._postprocess())
-
-    async def finish_with_postprocessors_async(self):
-        await asyncio.gather(*self._handler_futures)
-        self.finish_with_postprocessors()
 
     async def _postprocess(self):
         if self._finished:
@@ -354,16 +353,20 @@ class PageHandler(RequestHandler):
             self.log.info('page was aborted, skipping postprocessing')
 
         elif isinstance(e, FinishWithPostprocessors):
-            if e.wait_finish_group:
-                asyncio.create_task(self.finish_with_postprocessors_async())
+            if e.wait_handler:
+                asyncio.create_task(self._wait_handler_and_schedule_postprocessors())
             else:
-                self.finish_with_postprocessors()
+                self.schedule_postprocessors()
 
         elif isinstance(e, FailFastError):
             self._handle_fail_fast_error(e)
 
         else:
             super()._handle_request_exception(e)
+
+    async def _wait_handler_and_schedule_postprocessors(self):
+        await self._wait_handler_futures()
+        await self._postprocess()
 
     def _handle_fail_fast_error(self, e: FailFastError):
         response = e.failed_request.response
@@ -431,7 +434,7 @@ class PageHandler(RequestHandler):
             exception = None
 
         if isinstance(exception, HTTPErrorWithPostprocessors):
-            self.finish_with_postprocessors()
+            self.schedule_postprocessors()
             return
 
         self.set_header('Content-Type', media_types.TEXT_HTML)
