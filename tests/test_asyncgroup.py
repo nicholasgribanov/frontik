@@ -1,9 +1,9 @@
 import logging
-import unittest
 from functools import partial
 
 from tornado.concurrent import Future
-from tornado.testing import ExpectLog
+from tornado.testing import gen_test, AsyncTestCase, ExpectLog
+from tornado.web import app_log
 
 from frontik.futures import async_logger, AsyncGroup
 
@@ -11,7 +11,8 @@ from frontik.futures import async_logger, AsyncGroup
 logging.root.setLevel(logging.NOTSET)
 
 
-class TestAsyncGroup(unittest.TestCase):
+class TestAsyncGroup(AsyncTestCase):
+    @gen_test
     def test_callbacks(self):
         data = []
 
@@ -26,37 +27,47 @@ class TestAsyncGroup(unittest.TestCase):
         cb1 = ag.add(partial(data.append, 1))
         cb2 = ag.add(callback2)
 
-        self.assertEqual(ag._finished, False)
+        self.assertFalse(ag._finished)
 
         ag.try_finish()
 
-        self.assertEqual(ag._finished, False)
+        self.assertFalse(ag._finished)
 
         cb1()
 
-        self.assertEqual(ag._finished, False)
+        self.assertFalse(ag._finished)
 
         cb2()
 
-        self.assertEqual(ag._finished, True)
+        self.assertFalse(ag._finished)
+        self.assertEqual(data, [1, 2])
+
+        yield ag.get_finish_future()
+
+        self.assertTrue(ag._finished)
         self.assertEqual(data, [1, 2, 3])
 
+    @gen_test
     def test_notifications(self):
         f = Future()
         ag = AsyncGroup(partial(f.set_result, True))
         not1 = ag.add_notification()
         not2 = ag.add_notification()
 
-        self.assertEqual(ag._finished, False)
+        self.assertFalse(ag._finished)
 
         not1()
 
-        self.assertEqual(ag._finished, False)
+        self.assertFalse(ag._finished)
 
         not2('params', are='ignored')
 
-        self.assertEqual(ag._finished, True)
-        self.assertEqual(f.result(), True)
+        self.assertFalse(ag._finished)
+
+        yield ag.get_finish_future()
+
+        self.assertTrue(ag._finished)
+        self.assertTrue(f.result())
 
         with ExpectLog(async_logger, r'.*trying to finish already finished AsyncGroup\(name=None, finished=True\)'):
             ag.finish()
@@ -113,11 +124,14 @@ class TestAsyncGroup(unittest.TestCase):
 
         self.assertEqual(ag._finished, True)
 
+    @gen_test
     def test_exception_in_final(self):
         def finish_callback():
             raise Exception('callback1 error')
 
         ag = AsyncGroup(finish_callback)
 
-        self.assertRaises(Exception, ag.try_finish)
-        self.assertEqual(ag._finished, True)
+        with ExpectLog(app_log, r'.*Exception in callback.*AsyncGroup\.finish.*'):
+            ag.try_finish()
+            yield ag.get_finish_future()
+            self.assertEqual(ag._finished, True)
