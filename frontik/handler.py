@@ -20,7 +20,7 @@ import frontik.handler_active_limit
 import frontik.util
 from frontik import media_types, request_context
 from frontik.auth import DEBUG_AUTH_HEADER_NAME
-from frontik.futures import AbortAsyncGroup, AsyncGroup
+from frontik.futures import AbortAsyncGroup
 from frontik.debug import DEBUG_HEADER_NAME, DebugMode
 from frontik.http_client import FailFastError, HttpClient, ParseMode, RequestResult
 from frontik.preprocessors import _get_preprocessors, _unwrap_preprocessors
@@ -80,6 +80,7 @@ class PageHandler(RequestHandler):
         super().__init__(application, request, **kwargs)
 
         self._execute_coroutine = None
+        self._handler_futures = []
         self._preprocessor_futures = []
         self._exception_hooks = []
 
@@ -96,13 +97,10 @@ class PageHandler(RequestHandler):
     def prepare(self):
         self.active_limit = frontik.handler_active_limit.ActiveHandlersLimit(self.statsd_client)
         self.debug_mode = DebugMode(self)
-        self.finish_group = AsyncGroup(lambda: None, name='finish')
 
         self._http_client = self.application.http_client_factory.get_http_client(
             self, self.modify_http_client_request
         )  # type: HttpClient
-
-        self._handler_finished_notification = self.finish_group.add_notification()
 
         return super().prepare()
 
@@ -159,6 +157,25 @@ class PageHandler(RequestHandler):
     def add_future(future, callback):
         IOLoop.current().add_future(future, callback)
 
+    def wait_future(self, future: Future):
+        if self._handler_futures is None:
+            raise Exception('handler is already finished, calling wait_future at this time is incorrect')
+
+        self._handler_futures.append(future)
+        return future
+
+    def wait_callback(self, callback):
+        future = Future()
+
+        @wraps(callback)
+        def wait_wrapper(*args, **kwargs):
+            future.set_result(None)
+            return callback(*args, **kwargs)
+
+        future.add_done_callback(wait_wrapper)
+        self.wait_future(future)
+        return wait_wrapper
+
     # Requests handling
 
     def _execute(self, transforms, *args, **kwargs):
@@ -200,8 +217,12 @@ class PageHandler(RequestHandler):
 
             await page_handler_method()
 
-            self._handler_finished_notification()
-            await self.finish_group.get_finish_future()
+            while self._handler_futures:
+                futures = self._handler_futures[:]
+                self._handler_futures = []
+                await asyncio.gather(*futures)
+
+            self._handler_futures = None
 
             await self._postprocess()
 
@@ -265,6 +286,9 @@ class PageHandler(RequestHandler):
     def is_finished(self):
         return self._finished
 
+    def is_page_handler_finished(self):
+        return self._handler_futures is None
+
     def check_finished(self, callback):
         @wraps(callback)
         def wrapper(*args, **kwargs):
@@ -278,6 +302,10 @@ class PageHandler(RequestHandler):
 
     def finish_with_postprocessors(self):
         asyncio.create_task(self._postprocess())
+
+    async def finish_with_postprocessors_async(self):
+        await asyncio.gather(*self._handler_futures)
+        self.finish_with_postprocessors()
 
     async def _postprocess(self):
         if self._finished:
@@ -327,8 +355,7 @@ class PageHandler(RequestHandler):
 
         elif isinstance(e, FinishWithPostprocessors):
             if e.wait_finish_group:
-                self._handler_finished_notification()
-                self.add_future(self.finish_group.get_finish_future(), lambda _: self.finish_with_postprocessors())
+                asyncio.create_task(self.finish_with_postprocessors_async())
             else:
                 self.finish_with_postprocessors()
 
@@ -442,7 +469,10 @@ class PageHandler(RequestHandler):
                 self.log.info('page was already finished, breaking preprocessors chain')
                 return False
 
-        await asyncio.gather(*self._preprocessor_futures)
+        while self._preprocessor_futures:
+            futures = self._preprocessor_futures[:]
+            self._preprocessor_futures = []
+            await asyncio.gather(*futures)
 
         self._preprocessor_futures = None
 
@@ -555,7 +585,7 @@ class PageHandler(RequestHandler):
         return self._execute_http_client_method(host, uri, client_method, waited, callback)
 
     def _execute_http_client_method(self, host, uri, client_method, waited, callback):
-        if waited and (self.is_finished() or self.finish_group.is_finished()):
+        if waited and (self.is_finished() or self.is_page_handler_finished()):
             handler_logger.info(
                 'attempted to make waited http request to %s %s in finished handler, ignoring', host, uri
             )
@@ -568,7 +598,7 @@ class PageHandler(RequestHandler):
             callback = self.check_finished(callback)
 
         def handle_exception(future):
-            if future.exception() and not (self.is_finished() or self.finish_group.is_finished()):
+            if future.exception() and not (self.is_finished() or self.is_page_handler_finished()):
                 try:
                     raise future.exception()
                 except Exception as e:
@@ -579,7 +609,7 @@ class PageHandler(RequestHandler):
         future.add_done_callback(handle_exception)
 
         if waited:
-            self.finish_group.add_future(future)
+            self.wait_future(future)
 
         return future
 

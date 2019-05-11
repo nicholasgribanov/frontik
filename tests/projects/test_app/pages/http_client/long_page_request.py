@@ -1,4 +1,4 @@
-import time
+import asyncio
 
 from frontik.handler import JsonPageHandler
 
@@ -14,9 +14,5 @@ class Page(JsonPageHandler):
         self.json.put({'error_received': bool(response.error)})
 
     async def post_page(self):
-        self.add_timeout(
-            time.time() + 2, self.finish_group.add(self.check_finished(self.timeout_callback))
-        )
-
-    def timeout_callback(self):
+        await asyncio.sleep(2)
         self.json.put({'timeout_callback': True})

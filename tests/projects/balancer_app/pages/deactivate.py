@@ -1,4 +1,4 @@
-from tornado.ioloop import IOLoop
+import asyncio
 
 from frontik.handler import PageHandler
 
@@ -10,22 +10,22 @@ class Page(PageHandler):
     async def get_page(self):
         server = get_server(self, 'free')
         self.application.http_client_factory.register_upstream(
-            'deactivate', {'max_fails': 1, 'fail_timeout_sec': 0.1}, [server])
+            'deactivate', {'max_fails': 1, 'fail_timeout_sec': 0.1}, [server]
+        )
+
         self.text = ''
 
-        def check_server_active():
-            if server.is_active:
-                self.text += ' activated'
-
-            check_all_requests_done(self, 'deactivate')
-
-        def callback_post(_, response):
-            if response.error and response.code == 502 and not server.is_active:
-                self.text = 'deactivated'
-
-            self.add_timeout(IOLoop.current().time() + 0.2,
-                             self.finish_group.add(self.check_finished(check_server_active)))
-
-        self.post_url('deactivate', self.request.path, callback=callback_post)
-
+        post_future = self.post_url('deactivate', self.request.path)
         check_all_servers_occupied(self, 'deactivate')
+
+        post_result = await post_future
+
+        if post_result.response.error and post_result.response.code == 502 and not server.is_active:
+            self.text = 'deactivated'
+
+        await asyncio.sleep(0.2)
+
+        if server.is_active:
+            self.text += ' activated'
+
+        check_all_requests_done(self, 'deactivate')

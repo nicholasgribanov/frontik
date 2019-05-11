@@ -14,7 +14,7 @@ def _callback(name, handler, *args):
 class Page(JsonPageHandler):
     async def get_page(self):
         def _waited_callback(name):
-            return self.finish_group.add(partial(_callback, name, self))
+            return self.wait_callback(partial(_callback, name, self))
 
         self.json.put({'page': request_context.get_handler_name()})
 
@@ -22,7 +22,7 @@ class Page(JsonPageHandler):
 
         ThreadPoolExecutor(1).submit(_waited_callback('executor'))
 
-        self.add_future(asyncio.ensure_future(self.run_coroutine()), self.finish_group.add_notification())
+        self.wait_future(asyncio.ensure_future(self.run_coroutine()))
 
         future = self.post_url(self.request.host, self.request.uri)
         self.add_future(future, _waited_callback('future'))

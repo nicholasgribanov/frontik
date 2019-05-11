@@ -46,6 +46,10 @@ class TestPreprocessors(unittest.TestCase):
         response_json = frontik_test_app.get_page_json('preprocessors/preprocessor_future_return')
         self.assertEqual(response_json, {'test': 'test'})
 
+    def test_add_preprocessor_future_in_callback(self):
+        response_text = frontik_test_app.get_page_text('preprocessors/add_future_in_callback')
+        self.assertEqual(response_text, 'ok')
+
     def test_preprocessors_abort(self):
         response_json = frontik_test_app.get_page_json('preprocessors/aborted?abort_preprocessors=true')
         self.assertEqual(

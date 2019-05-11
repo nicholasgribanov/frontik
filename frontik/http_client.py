@@ -7,6 +7,7 @@ from asyncio import Future
 from enum import IntEnum
 from functools import partial
 from random import shuffle, random
+from typing import TYPE_CHECKING
 
 import pycurl
 import logging
@@ -22,6 +23,9 @@ from frontik import media_types
 from frontik.debug import DEBUG_HEADER_NAME, response_from_debug
 from frontik.request_context import get_request_id
 from frontik.util import make_url, make_body, make_mfd
+
+if TYPE_CHECKING:
+    from frontik.handler import PageHandler
 
 
 def HTTPResponse__repr__(self):
@@ -480,7 +484,7 @@ class HttpClientFactory:
         self._kafka_cluster = kafka_cluster
         self._metrics_callback = None
 
-    def get_http_client(self, handler, modify_http_request_hook):
+    def get_http_client(self, handler: 'PageHandler', modify_http_request_hook):
         kafka_producer = (
             self.application.get_kafka_producer(self._kafka_cluster) if self._send_metrics_to_kafka else None
         )
