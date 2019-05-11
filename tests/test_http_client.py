@@ -60,3 +60,14 @@ class TestHttpClient(unittest.TestCase):
     def test_http_raise_error(self):
         text = frontik_test_app.get_page_text('http_client/raise_error')
         self.assertEqual(text, 'UnicodeEncodeError')
+
+    def test_not_waited_requests(self):
+        json = frontik_test_app.get_page_json('http_client/not_waited_requests')
+        self.assertEqual(json, {'get': True})
+
+    def test_not_waited_coroutine(self):
+        json = frontik_test_app.get_page_json('http_client/not_waited_coroutine')
+        self.assertEqual(json, {'get': True})
+
+        json = frontik_test_app.get_page_json('http_client/not_waited_coroutine')
+        self.assertEqual(json, {'post_made': True, 'put_made': True, 'delete_cancelled': True})
