@@ -9,8 +9,8 @@ from functools import wraps
 from typing import TYPE_CHECKING
 
 import tornado.curl_httpclient
-import tornado.httputil
 import tornado.web
+from tornado.httputil import HTTPHeaders, HTTPServerRequest
 from tornado.ioloop import IOLoop
 from tornado.options import options
 from tornado.web import RequestHandler
@@ -34,6 +34,7 @@ if TYPE_CHECKING:
 
     from aiokafka import AIOKafkaProducer
 
+    from frontik.app import FrontikApplication
     from frontik.http_client import BalancedHttpRequest
     from frontik.integrations.sentry import SentryLogger
 
@@ -66,7 +67,7 @@ class PageHandler(RequestHandler):
 
     preprocessors = ()
 
-    def __init__(self, application, request, **kwargs):
+    def __init__(self, application: 'FrontikApplication', request: HTTPServerRequest, **kwargs):
         self.name = self.__class__.__name__
         self.request_id = request_context.get_request_id()
         self.config = application.config
@@ -118,7 +119,7 @@ class PageHandler(RequestHandler):
             self._debug_access = debug_access
 
     def set_default_headers(self) -> None:
-        self._headers = tornado.httputil.HTTPHeaders({
+        self._headers = HTTPHeaders({
             'Server': f'Frontik/{frontik_version}',
             'X-Request-Id': self.request_id,
         })
@@ -212,19 +213,19 @@ class PageHandler(RequestHandler):
 
     async def get_page(self):
         """ This method can be implemented in the subclass """
-        self.__return_405()
+        await self.__return_405()
 
     async def post_page(self):
         """ This method can be implemented in the subclass """
-        self.__return_405()
+        await self.__return_405()
 
     async def put_page(self):
         """ This method can be implemented in the subclass """
-        self.__return_405()
+        await self.__return_405()
 
     async def delete_page(self):
         """ This method can be implemented in the subclass """
-        self.__return_405()
+        await self.__return_405()
 
     def __return_405(self):
         allowed_methods = [
@@ -232,7 +233,7 @@ class PageHandler(RequestHandler):
         ]
         self.set_header('Allow', ', '.join(allowed_methods))
         self.set_status(405)
-        self.finish()
+        return self.finish()
 
     def get_page_fail_fast(self, request_result: RequestResult):
         self.__return_error(request_result.response.code)
@@ -291,7 +292,7 @@ class PageHandler(RequestHandler):
 
         renderer = next((p for _, p in self.renderers if p.can_apply()), None)  # type: Renderer
         if renderer is None:
-            self.finish()
+            await self.finish()
             return
 
         self.log.debug('using %s renderer', renderer)
@@ -299,7 +300,7 @@ class PageHandler(RequestHandler):
 
         postprocessed_result = await self._run_template_postprocessors(self._render_postprocessors, rendered_result)
         if postprocessed_result is not None:
-            self.finish(postprocessed_result)
+            await self.finish(postprocessed_result)
 
     def on_connection_close(self):
         super().on_connection_close()
@@ -566,11 +567,6 @@ class PageHandler(RequestHandler):
         if waited and callable(callback):
             callback = self.check_finished(callback)
 
-        future = client_method(callback)
-
-        if waited:
-            self.finish_group.add_future(future)
-
         def handle_exception(future):
             if future.exception() and not (self.is_finished() or self.finish_group.is_finished()):
                 try:
@@ -579,7 +575,11 @@ class PageHandler(RequestHandler):
                     self.abort()
                     self._handle_request_exception(e)
 
+        future = client_method(callback)
         future.add_done_callback(handle_exception)
+
+        if waited:
+            self.finish_group.add_future(future)
 
         return future
 

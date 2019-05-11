@@ -18,10 +18,11 @@ class Page(JsonPageHandler):
             self.data = {}
 
     def finish(self, chunk=None):
-        super(Page, self).finish(chunk)
+        future = super().finish(chunk)
         if self.request.method == 'GET':
             # HTTP requests with waited=False can be made after handler is finished
             self.json.put(self.put_url(self.request.host, self.request.path, waited=False))
+        return future
 
     async def coro(self):
         result = await self.post_url(self.request.host, self.request.path, waited=False)
