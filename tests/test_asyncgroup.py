@@ -15,6 +15,7 @@ class TestAsyncGroup(AsyncTestCase):
     @gen_test
     def test_callbacks(self):
         data = []
+        future = Future()
 
         def callback2():
             data.append(2)
@@ -22,6 +23,7 @@ class TestAsyncGroup(AsyncTestCase):
         def finish_callback():
             self.assertEqual(data, [1, 2])
             data.append(3)
+            future.set_result(None)
 
         ag = AsyncGroup(finish_callback)
         cb1 = ag.add(partial(data.append, 1))
@@ -42,15 +44,15 @@ class TestAsyncGroup(AsyncTestCase):
         self.assertFalse(ag._finished)
         self.assertEqual(data, [1, 2])
 
-        yield ag.get_finish_future()
+        yield future
 
         self.assertTrue(ag._finished)
         self.assertEqual(data, [1, 2, 3])
 
     @gen_test
     def test_notifications(self):
-        f = Future()
-        ag = AsyncGroup(partial(f.set_result, True))
+        future = Future()
+        ag = AsyncGroup(partial(future.set_result, True))
         not1 = ag.add_notification()
         not2 = ag.add_notification()
 
@@ -64,10 +66,10 @@ class TestAsyncGroup(AsyncTestCase):
 
         self.assertFalse(ag._finished)
 
-        yield ag.get_finish_future()
+        yield future
 
         self.assertTrue(ag._finished)
-        self.assertTrue(f.result())
+        self.assertTrue(future.result())
 
         with ExpectLog(async_logger, r'.*trying to finish already finished AsyncGroup\(name=None, finished=True\)'):
             ag.finish()
@@ -126,12 +128,15 @@ class TestAsyncGroup(AsyncTestCase):
 
     @gen_test
     def test_exception_in_final(self):
+        future = Future()
+
         def finish_callback():
+            future.set_result(None)
             raise Exception('callback1 error')
 
         ag = AsyncGroup(finish_callback)
 
         with ExpectLog(app_log, r'.*Exception in callback.*AsyncGroup\.finish.*'):
             ag.try_finish()
-            yield ag.get_finish_future()
+            yield future
             self.assertEqual(ag._finished, True)

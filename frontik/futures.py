@@ -28,7 +28,6 @@ class AsyncGroup:
         self._finish_cb = finish_cb
         self._finished = False
         self._name = name
-        self._future = Future()
         self._start_time = time.time()
 
     def is_finished(self):
@@ -37,8 +36,6 @@ class AsyncGroup:
     def abort(self):
         async_logger.info('aborting %s', self)
         self._finished = True
-        if not self._future.done():
-            self._future.set_exception(AbortAsyncGroup())
 
     def finish(self):
         if self._finished:
@@ -46,7 +43,6 @@ class AsyncGroup:
             return
 
         self._finished = True
-        self._future.set_result(None)
 
         try:
             self._finish_cb()
@@ -101,9 +97,6 @@ class AsyncGroup:
         IOLoop.current().add_future(future, self.add_notification())
         return future
 
-    def get_finish_future(self):
-        return self._future
-
     def __str__(self):
         return f'AsyncGroup(name={self._name}, finished={self._finished})'
 
@@ -118,6 +111,9 @@ def future_fold(future, result_mapper=None, exception_mapper=None):
 
     res_future = Future()
 
+    def default_exception_mapper(error):
+        raise error
+
     def _process(func, value):
         try:
             processed = func(value) if func is not None else value
@@ -126,15 +122,13 @@ def future_fold(future, result_mapper=None, exception_mapper=None):
             return
         res_future.set_result(processed)
 
+    if not callable(exception_mapper):
+        exception_mapper = default_exception_mapper
+
     def _on_ready(wrapped_future):
         exception = wrapped_future.exception()
         if exception is not None:
-            if not callable(exception_mapper):
-                def default_exception_func(error):
-                    raise error
-                _process(default_exception_func, exception)
-            else:
-                _process(exception_mapper, exception)
+            _process(exception_mapper, exception)
         else:
             _process(result_mapper, future.result())
 
