@@ -3,9 +3,9 @@ import unittest
 from .instances import frontik_test_app
 
 
-class TestAsyncGroup(unittest.TestCase):
+class TestGenMulti(unittest.TestCase):
     def test_group(self):
-        json = frontik_test_app.get_page_json('async_group/group')
+        json = frontik_test_app.get_page_json('gen_multi')
         self.assertEqual(
             json,
             {
@@ -16,7 +16,7 @@ class TestAsyncGroup(unittest.TestCase):
         )
 
     def test_group_request_fail(self):
-        json = frontik_test_app.get_page_json('async_group/group?fail_request=true')
+        json = frontik_test_app.get_page_json('gen_multi?fail_request=true')
         self.assertEqual(
             json,
             {
@@ -27,5 +27,5 @@ class TestAsyncGroup(unittest.TestCase):
         )
 
     def test_group_callback_fail(self):
-        response = frontik_test_app.get_page('async_group/group?fail_callback=true')
+        response = frontik_test_app.get_page('gen_multi?fail_callback=true')
         self.assertEqual(response.status_code, 500)

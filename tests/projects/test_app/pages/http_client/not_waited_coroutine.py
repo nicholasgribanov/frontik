@@ -1,6 +1,6 @@
 import asyncio
 
-from frontik.handler import AbortAsyncGroup, JsonPageHandler
+from frontik.handler import AbortPage, JsonPageHandler
 
 
 class Page(JsonPageHandler):
@@ -31,7 +31,7 @@ class Page(JsonPageHandler):
         # HTTP requests with waited=True are aborted after handler is finished
         try:
             await self.delete_url(self.request.host, self.request.path, waited=True)
-        except AbortAsyncGroup:
+        except AbortPage:
             self.record_request({'delete_cancelled': True})
 
     async def post_page(self):

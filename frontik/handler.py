@@ -20,7 +20,6 @@ import frontik.handler_active_limit
 import frontik.util
 from frontik import media_types, request_context
 from frontik.auth import DEBUG_AUTH_HEADER_NAME
-from frontik.futures import AbortAsyncGroup
 from frontik.debug import DEBUG_HEADER_NAME, DebugMode
 from frontik.http_client import FailFastError, HttpClient, ParseMode, RequestResult
 from frontik.preprocessors import _get_preprocessors, _unwrap_preprocessors
@@ -41,6 +40,10 @@ if TYPE_CHECKING:
 
 def _fallback_status_code(status_code):
     return status_code if status_code in http.client.responses else http.client.SERVICE_UNAVAILABLE
+
+
+class AbortPage(Exception):
+    pass
 
 
 class FinishWithPostprocessors(Exception):
@@ -225,7 +228,7 @@ class PageHandler(RequestHandler):
             try:
                 self._handle_request_exception(e)
             except Exception:
-                self.log.error('Exception in exception handler', exc_info=True)
+                self.log.exception('exception in exception handler')
 
     async def _wait_handler_futures(self):
         while self._handler_futures:
@@ -281,8 +284,6 @@ class PageHandler(RequestHandler):
         self.renderers.insert(i, (priority, renderer))
 
     def abort(self):
-        # self.finish_group.abort()
-
         if self._execute_coroutine is not None:
             self._execute_coroutine.close()
 
@@ -349,8 +350,8 @@ class PageHandler(RequestHandler):
             exception_hook(typ, value, tb)
 
     def _handle_request_exception(self, e):
-        if isinstance(e, AbortAsyncGroup):
-            self.log.info('page was aborted, skipping postprocessing')
+        if isinstance(e, AbortPage):
+            self.log.info('page was aborted')
 
         elif isinstance(e, FinishWithPostprocessors):
             if e.wait_handler:
@@ -594,7 +595,7 @@ class PageHandler(RequestHandler):
             )
 
             future = Future()
-            future.set_exception(AbortAsyncGroup())
+            future.set_exception(AbortPage())
             return future
 
         if waited and callable(callback):

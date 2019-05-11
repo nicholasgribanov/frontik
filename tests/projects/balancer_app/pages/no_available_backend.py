@@ -1,5 +1,4 @@
 from frontik import handler, media_types
-from frontik.futures import AsyncGroup
 
 from tests.projects.balancer_app import get_server
 from tests.projects.balancer_app.pages import check_all_requests_done
@@ -11,19 +10,17 @@ class Page(handler.PageHandler):
         self.application.http_client_factory.register_upstream('no_available_backend', {}, [server])
         server.is_active = False
 
-        def check_requests_cb():
-            check_all_requests_done(self, 'no_available_backend')
+        post_future = self.post_url('no_available_backend', self.request.path)
+        check_all_requests_done(self, 'no_available_backend')
 
-        async_group = AsyncGroup(check_requests_cb)
+        post_result = await post_future
 
-        def callback_post(text, response):
-            if response.error and response.code == 502:
-                self.text = 'no backend available'
-                return
+        if post_result.response.error and post_result.response.code == 502:
+            self.text = 'no backend available'
+            return
 
-            self.text = text
+        self.text = post_result.data
 
-        self.post_url('no_available_backend', self.request.path, callback=async_group.add(callback_post))
         check_all_requests_done(self, 'no_available_backend')
 
     async def post_page(self):
