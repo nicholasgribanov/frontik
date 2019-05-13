@@ -1,5 +1,4 @@
-from datetime import timedelta
-from functools import partial
+import asyncio
 
 from tornado.web import HTTPError
 
@@ -29,7 +28,11 @@ class Page(PageHandler):
 
     def finish(self, chunk=None):
         # delay page finish to make sure that sentry mock got the exception
-        self.add_timeout(timedelta(milliseconds=300), partial(super().finish, chunk))
+        return asyncio.ensure_future(self.finish_delayed(chunk))
+
+    async def finish_delayed(self, chunk):
+        await asyncio.sleep(0.2)
+        await super().finish(chunk)
 
     def initialize_sentry_logger(self, sentry_logger: SentryLogger):
         sentry_logger.user = {'id': '123456'}

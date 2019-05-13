@@ -22,11 +22,11 @@ class StatsdIntegration(Integration):
         else:
             self.statsd_client = StatsDClient(options.statsd_host, options.statsd_port, app=app.app)
 
-        app.statsd_client = self.statsd_client
+        app.get_statsd_client = lambda: self.statsd_client
         return None
 
     def initialize_handler(self, handler):
-        handler.statsd_client = self.statsd_client
+        handler.get_statsd_client = lambda: self.statsd_client
 
 
 def _convert_tag(name, value):

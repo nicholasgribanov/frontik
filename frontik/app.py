@@ -20,13 +20,15 @@ from frontik.renderers import jinja_renderer, json_renderer, xml_renderer, xslt_
 from frontik.routing import FileMappingRouter, FrontikRouter
 from frontik.version import version as frontik_version
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from typing import Optional
 
     from aiokafka import AIOKafkaProducer
     from tornado.httputil import HTTPServerRequest
 
+    from frontik.integrations.kafka import AIOKafkaProducer
     from frontik.integrations.sentry import SentryLogger
+    from frontik.integrations.statsd import StatsDClient
 
 
 class VersionHandler(RequestHandler):
@@ -157,8 +159,13 @@ class FrontikApplication(Application):
 
         JSON_REQUESTS_LOGGER.info('', extra={CUSTOM_JSON_EXTRA: extra})
 
+    # Integrations stubs
+
+    def get_sentry_logger(self, request: 'HTTPServerRequest', function) -> 'Optional[SentryLogger]':  # pragma: no cover
+        pass
+
     def get_kafka_producer(self, producer_name: str) -> 'Optional[AIOKafkaProducer]':  # pragma: no cover
         pass
 
-    def get_sentry_logger(self, request: 'HTTPServerRequest', function) -> 'Optional[SentryLogger]':  # pragma: no cover
+    def get_statsd_client(self) -> 'Optional[StatsDClient]':  # pragma: no cover
         pass

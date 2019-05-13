@@ -10,32 +10,41 @@ from typing import TYPE_CHECKING
 
 import tornado.curl_httpclient
 import tornado.web
-from tornado.httputil import HTTPHeaders, HTTPServerRequest
+from tornado.httputil import HTTPHeaders
 from tornado.ioloop import IOLoop
 from tornado.options import options
 from tornado.web import RequestHandler
 
 import frontik.auth
 import frontik.handler_active_limit
-import frontik.util
 from frontik import media_types, request_context
 from frontik.auth import DEBUG_AUTH_HEADER_NAME
 from frontik.debug import DEBUG_HEADER_NAME, DebugMode
-from frontik.http_client import FailFastError, HttpClient, ParseMode, RequestResult
+from frontik.http_client import FailFastError, ParseMode, RequestResult
 from frontik.preprocessors import _get_preprocessors, _unwrap_preprocessors
 from frontik.renderers import GenericRenderer, Renderer
-from frontik.util import make_url
+from frontik.util import _decode_bytes_from_charset, make_url
 from frontik.version import version as frontik_version
 
-if TYPE_CHECKING:
-    from types import MethodType
-    from typing import Any, List, Optional
+if TYPE_CHECKING:  # pragma: no cover
+    from types import MethodType, TracebackType
+    from typing import Any, Callable, Coroutine, List, Optional, Type
 
     from aiokafka import AIOKafkaProducer
+    from tornado.httputil import HTTPServerRequest
 
     from frontik.app import FrontikApplication
-    from frontik.http_client import BalancedHttpRequest
+    from frontik.http_client import BalancedHttpRequest, HttpClient
     from frontik.integrations.sentry import SentryLogger
+    from frontik.integrations.statsd import StatsDClient
+
+    RenderPostprocessor = Callable[['PageHandler', str], Coroutine[None, None, None]]
+    Postprocessor = Callable[['PageHandler'], Coroutine[None, None, None]]
+
+    ExceptionType = Optional[Type[BaseException]]
+    ExceptionInstance = Optional[BaseException]
+    TracebackInstance = Optional[TracebackType]
+    ExceptionHook = Callable[[ExceptionType, ExceptionInstance, TracebackInstance], None]
 
 
 def _fallback_status_code(status_code):
@@ -70,7 +79,7 @@ class PageHandler(RequestHandler):
 
     preprocessors = ()
 
-    def __init__(self, application: 'FrontikApplication', request: HTTPServerRequest, **kwargs):
+    def __init__(self, application: 'FrontikApplication', request: 'HTTPServerRequest', **kwargs):
         self.name = self.__class__.__name__
         self.request_id = request_context.get_request_id()
         self.config = application.config
@@ -83,22 +92,22 @@ class PageHandler(RequestHandler):
         super().__init__(application, request, **kwargs)
 
         self._execute_coroutine = None
-        self._handler_futures = []
-        self._preprocessor_futures = []
-        self._exception_hooks = []
+        self._handler_futures = []  # type: List[Future]
+        self._preprocessor_futures = []  # type: List[Future]
+        self._exception_hooks = []  # type: List[ExceptionHook]
 
         for integration in application.available_integrations:
             integration.initialize_handler(self)
 
         self._debug_access = None
-        self._render_postprocessors = []
-        self._postprocessors = []
+        self._render_postprocessors = []  # type: List[RenderPostprocessor]
+        self._postprocessors = []  # type: List[Postprocessor]
 
     def __repr__(self):
         return '.'.join([self.__module__, self.__class__.__name__])
 
     def prepare(self):
-        self.active_limit = frontik.handler_active_limit.ActiveHandlersLimit(self.statsd_client)
+        self.active_limit = frontik.handler_active_limit.ActiveHandlersLimit(self.get_statsd_client())
         self.debug_mode = DebugMode(self)
 
         self._http_client = self.application.http_client_factory.get_http_client(
@@ -132,7 +141,7 @@ class PageHandler(RequestHandler):
             self.log.warning('cannot decode utf-8 query parameter, trying other charsets')
 
         try:
-            return frontik.util.decode_string_from_charset(value)
+            return _decode_bytes_from_charset(value)
         except UnicodeError:
             self.log.exception('cannot decode argument, ignoring invalid chars')
             return value.decode('utf-8', 'ignore')
@@ -336,14 +345,14 @@ class PageHandler(RequestHandler):
         self.abort()
         self.cleanup()
 
-    def register_exception_hook(self, exception_hook):
+    def register_exception_hook(self, exception_hook: 'ExceptionHook') -> None:
         """
         Adds a function to the list of hooks, which are executed when `log_exception` is called.
         `exception_hook` must have the same signature as `log_exception`
         """
         self._exception_hooks.append(exception_hook)
 
-    def log_exception(self, typ, value, tb):
+    def log_exception(self, typ: 'ExceptionType', value: 'ExceptionInstance', tb: 'TracebackInstance') -> None:
         super().log_exception(typ, value, tb)
 
         for exception_hook in self._exception_hooks:
@@ -506,10 +515,10 @@ class PageHandler(RequestHandler):
 
         return rendered_template
 
-    def add_render_postprocessor(self, postprocessor):
+    def add_render_postprocessor(self, postprocessor: 'RenderPostprocessor') -> None:
         self._render_postprocessors.append(postprocessor)
 
-    def add_postprocessor(self, postprocessor):
+    def add_postprocessor(self, postprocessor: 'Postprocessor') -> None:
         self._postprocessors.append(postprocessor)
 
     # HTTP client methods
@@ -620,10 +629,13 @@ class PageHandler(RequestHandler):
     # Integrations stubs
 
     def get_sentry_logger(self) -> 'Optional[SentryLogger]':  # pragma: no cover
-        return None
+        pass
 
     def get_kafka_producer(self, producer_name: str) -> 'Optional[AIOKafkaProducer]':  # pragma: no cover
-        return None
+        pass
+
+    def get_statsd_client(self) -> 'Optional[StatsDClient]':  # pragma: no cover
+        pass
 
 
 class ErrorHandler(PageHandler, tornado.web.ErrorHandler):

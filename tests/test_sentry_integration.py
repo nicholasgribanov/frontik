@@ -76,7 +76,7 @@ class TestSentryIntegration(unittest.TestCase):
         self.assertEqual({'exceptions': []}, sentry_json)
 
     def test_sentry_not_configured(self):
-        self.assertEqual(200, frontik_re_app.get_page('sentry_not_configured').status_code)
+        self.assertEqual('sentry logger is None', frontik_re_app.get_page_text('sentry_not_configured'))
 
     @staticmethod
     def _find_sentry_message(message):

@@ -20,10 +20,9 @@ from tornado.httpclient import HTTPResponse
 from tornado.httputil import HTTPHeaders
 from tornado.web import OutputTransform
 
-import frontik.util
-import frontik.xml_util
 from frontik import media_types, request_context
 from frontik.loggers import BufferedHandler
+from frontik.util import _decode_bytes_from_charset, any_to_unicode, get_cookie_or_url_param_value
 
 DEBUG_HEADER_NAME = 'x-hh-debug'
 
@@ -71,7 +70,7 @@ def _response_to_json(response):
             body = ''
         elif 'text/html' in content_type:
             content_type_class = 'html'
-            body = frontik.util.decode_string_from_charset(response.body, try_charsets)
+            body = _decode_bytes_from_charset(response.body, try_charsets)
         elif 'protobuf' in content_type:
             body = repr(response.body)
         elif 'xml' in content_type:
@@ -83,7 +82,7 @@ def _response_to_json(response):
         else:
             if 'javascript' in content_type:
                 content_type_class = 'javascript'
-            body = frontik.util.decode_string_from_charset(response.body, try_charsets)
+            body = _decode_bytes_from_charset(response.body, try_charsets)
 
     except Exception:
         debug_log.exception('cannot parse response body')
@@ -185,7 +184,7 @@ def _request_to_curl_string(request):
         curl_data_string = f"--data '{request_body}'" if request_body else ''
 
     def _format_header(key):
-        header_value = frontik.util.any_to_unicode(curl_headers[key])
+        header_value = any_to_unicode(curl_headers[key])
         return f"-H '{key}: {_escape_apos(header_value)}'"
 
     return "{echo} curl -X {method} '{url}' {headers} {data}".format(
@@ -463,7 +462,7 @@ class DebugTransform(OutputTransform):
 
 class DebugMode:
     def __init__(self, handler):
-        debug_value = frontik.util.get_cookie_or_url_param_value(handler, 'debug')
+        debug_value = get_cookie_or_url_param_value(handler, 'debug')
 
         self.mode_values = debug_value.split(',') if debug_value is not None else ''
         self.inherited = handler.request.headers.get(DEBUG_HEADER_NAME)

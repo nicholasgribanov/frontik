@@ -48,10 +48,12 @@ def gc_metrics_collector(phase, info):
 
 
 def send_metrics(app):
+    statsd_client = app.get_statsd_client()
+
     if GC_STATS.count == 0:
-        app.statsd_client.time('gc.duration', 0)
-        app.statsd_client.count('gc.count', 0)
+        statsd_client.time('gc.duration', 0)
+        statsd_client.count('gc.count', 0)
     else:
-        app.statsd_client.time('gc.duration', int(GC_STATS.duration * 1000))
-        app.statsd_client.count('gc.count', GC_STATS.count)
+        statsd_client.time('gc.duration', int(GC_STATS.duration * 1000))
+        statsd_client.count('gc.count', GC_STATS.count)
         GC_STATS.duration = GC_STATS.count = 0

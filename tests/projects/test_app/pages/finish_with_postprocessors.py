@@ -1,14 +1,14 @@
 from lxml import etree
 from tornado.web import HTTPError
 
-from frontik.handler import FinishWithPostprocessors, JsonPageHandler, XsltPageHandler
+from frontik.handler import FinishWithPostprocessors, JsonPageHandler, PageHandler, XsltPageHandler
 
 
 class Page(JsonPageHandler, XsltPageHandler):
     def prepare(self):
         super().prepare()
 
-        async def pp(handler):
+        async def pp(handler: PageHandler):
             handler.add_header('X-Foo', 'Bar')
 
         self.add_postprocessor(pp)

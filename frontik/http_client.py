@@ -24,7 +24,10 @@ from frontik.debug import DEBUG_HEADER_NAME, response_from_debug
 from frontik.request_context import get_request_id
 from frontik.util import make_url, make_body, make_mfd
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
+    from typing import Dict
+
+    from frontik.app import FrontikApplication
     from frontik.handler import PageHandler
 
 
@@ -452,7 +455,7 @@ class BalancedHttpRequest:
 
 
 class HttpClientFactory:
-    def __init__(self, application, upstreams):
+    def __init__(self, application: 'FrontikApplication', upstreams):
         AsyncHTTPClient.configure('tornado.curl_httpclient.CurlAsyncHTTPClient', max_clients=options.max_http_clients)
 
         self.tornado_http_client = AsyncHTTPClient()
@@ -462,7 +465,7 @@ class HttpClientFactory:
             self.tornado_http_client._multi.setopt(pycurl.M_MAXCONNECTS, options.max_http_clients_connects)
 
         self.application = application
-        self.upstreams = {}
+        self.upstreams = {}  # type: Dict[Upstream]
 
         for name, upstream in upstreams.items():
             servers = [Server.from_config(s) for s in upstream['servers']]
@@ -497,7 +500,7 @@ class HttpClientFactory:
 
         return HttpClient(
             self.tornado_http_client, handler.debug_mode, modify_http_request_hook, self.upstreams,
-            self.application.statsd_client, kafka_producer
+            handler.get_statsd_client(), kafka_producer
         )
 
     def update_upstream(self, name, config):
@@ -528,10 +531,11 @@ class HttpClientFactory:
         http_client_logger.info('update %s upstream: %s', name, str(upstream))
 
     def _statsd_metrics_callback(self):
-        self.application.statsd_client.stack()
-        self.application.statsd_client.gauge('http.client.max_clients', options.max_http_clients)
-        self.application.statsd_client.gauge('http.client.free_clients', len(self.tornado_http_client._free_list))
-        self.application.statsd_client.flush()
+        statsd_client = self.application.get_statsd_client()
+        statsd_client.stack()
+        statsd_client.gauge('http.client.max_clients', options.max_http_clients)
+        statsd_client.gauge('http.client.free_clients', len(self.tornado_http_client._free_list))
+        statsd_client.flush()
 
 
 class ParseMode(IntEnum):

@@ -94,12 +94,10 @@ class FrontikTransport(Transport):
         super().__init__(options)
 
         self._disabled_until = None  # type: Optional[datetime]
-        self._auth = None  # type: Optional[Auth]
-        self._http_client = None  # type: Optional[AsyncHTTPClient]
 
     def prepare(self, app: 'FrontikApplication'):
-        self._auth = self.parsed_dsn.to_auth(app.app)
-        self._http_client = app.http_client_factory.tornado_http_client
+        self._auth = self.parsed_dsn.to_auth(app.app)  # type: Auth
+        self._http_client = app.http_client_factory.tornado_http_client  # type: AsyncHTTPClient
 
     def capture_event(self, event: Dict[str, Any]) -> None:
         if self._disabled_until is not None:

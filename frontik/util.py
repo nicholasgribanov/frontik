@@ -1,12 +1,16 @@
 import mimetypes
 import os.path
 import re
+from typing import TYPE_CHECKING
 from urllib.parse import urlencode
 from uuid import uuid4
 
 from tornado.escape import to_unicode, utf8
 
 from frontik import media_types
+
+if TYPE_CHECKING:  # pragma: no cover
+    from typing import Iterable
 
 
 def any_to_unicode(s):
@@ -46,10 +50,7 @@ def make_url(base, **query_args):
     return to_unicode(base)
 
 
-def decode_string_from_charset(string, charsets=('cp1251',)):
-    if isinstance(string, str):
-        return string
-
+def _decode_bytes_from_charset(string: bytes, charsets: 'Iterable[str]' = ('cp1251',)) -> str:
     decoded_body = None
     for c in charsets:
         try:
