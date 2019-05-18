@@ -10,8 +10,8 @@ from typing import Type
 
 import tornado.autoreload
 import tornado.httpserver
-import tornado.ioloop
 from tornado.httputil import HTTPServerRequest
+from tornado.ioloop import IOLoop
 from tornado.options import parse_command_line, parse_config_file
 
 from frontik.app import FrontikApplication
@@ -86,7 +86,7 @@ def run_server(app: FrontikApplication):
         http_server.bind(options.port, options.host, reuse_port=options.reuse_port)
         http_server.start()
 
-        io_loop = tornado.ioloop.IOLoop.current()
+        io_loop = IOLoop.current()
 
         if options.autoreload:
             tornado.autoreload.start(1000)
@@ -147,32 +147,22 @@ def main(config_file=None):
 
     try:
         app = app_class(app_root=os.path.dirname(module.__file__), **options.as_dict())
-        ioloop = tornado.ioloop.IOLoop.current()
+        ioloop = IOLoop.current()
 
         executor = ThreadPoolExecutor(options.common_executor_pool_size)
         ioloop.asyncio_loop.set_default_executor(executor)
 
-        def _async_init_cb():
+        async def async_init():
             try:
                 init_futures = app.default_init_futures + list(app.init_async())
-
-                if init_futures:
-                    def await_init(future):
-                        if future.exception() is not None:
-                            log.error('failed to initialize application, init_async returned: %s', future.exception())
-                            sys.exit(1)
-
-                        run_server(app)
-
-                    ioloop.add_future(asyncio.gather(*init_futures), await_init)
-                else:
-                    run_server(app)
+                await asyncio.gather(*init_futures)
+                run_server(app)
 
             except Exception:
                 log.exception('failed to initialize application')
                 sys.exit(1)
 
-        ioloop.add_callback(_async_init_cb)
+        ioloop.add_callback(lambda: asyncio.create_task(async_init()))
         ioloop.start()
 
     except BaseException:

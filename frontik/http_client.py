@@ -372,8 +372,6 @@ class BalancedHttpRequest:
 
             if content_type is None:
                 content_type = self.headers.get('Content-Type', media_types.APPLICATION_FORM_URLENCODED)
-
-            self.headers['Content-Length'] = str(len(self.body))
         elif self.method == 'PUT':
             self.body = make_body(data)
         else:
@@ -732,18 +730,15 @@ class HttpClient:
         return response, debug_extra
 
     def _log_response(self, balanced_request, response, retries_count, do_retry, debug_extra):
-        log_message = 'got {code}{size}{retry}, {do_retry} {method} {url} in {time:.2f}ms'.format(
-            code=response.code,
-            method=balanced_request.method,
-            url=response.effective_url,
-            size=' {0} bytes'.format(len(response.body)) if response.body is not None else '',
-            retry=' retry {}'.format(retries_count) if retries_count > 0 else '',
-            do_retry='retrying' if do_retry else 'final',
-            time=response.request_time * 1000
-        )
+        retries_count_str = f' retry {retries_count}' if retries_count > 0 else ''
+        will_retry = 'retrying' if do_retry else 'final'
 
         log_method = http_client_logger.warning if response.code >= 500 else http_client_logger.info
-        log_method(log_message, extra=debug_extra)
+        log_method(
+            'got %s%s, %s for %s %s in %.2fms', response.code, retries_count_str, will_retry,
+            balanced_request.method, response.effective_url, response.request_time * 1000,
+            extra=debug_extra
+        )
 
         if response.code == 599:
             timings_info = ['{}={}ms'.format(stage, int(timing * 1000)) for stage, timing in response.time_info.items()]
