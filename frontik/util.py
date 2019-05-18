@@ -10,7 +10,9 @@ from tornado.escape import to_unicode, utf8
 from frontik import media_types
 
 if TYPE_CHECKING:  # pragma: no cover
-    from typing import Iterable
+    from typing import Iterable, Optional
+
+    from frontik.handler import PageHandler
 
 
 def any_to_unicode(s):
@@ -141,7 +143,7 @@ def _create_file_field(name, filename, data, content_type):
     ]
 
 
-def get_cookie_or_url_param_value(handler, param_name):
+def get_cookie_or_url_param_value(handler: 'PageHandler', param_name: 'str') -> 'Optional[str]':
     return handler.get_argument(param_name, handler.get_cookie(param_name, None))
 
 

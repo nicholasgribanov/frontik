@@ -10,6 +10,7 @@ import traceback
 from binascii import crc32
 from http.cookies import SimpleCookie
 from io import BytesIO
+from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
@@ -23,6 +24,9 @@ from tornado.web import OutputTransform
 from frontik import media_types, request_context
 from frontik.loggers import BufferedHandler
 from frontik.util import _decode_bytes_from_charset, any_to_unicode, get_cookie_or_url_param_value
+
+if TYPE_CHECKING:
+    from typing import List
 
 DEBUG_HEADER_NAME = 'x-hh-debug'
 
@@ -464,8 +468,8 @@ class DebugMode:
     def __init__(self, handler):
         debug_value = get_cookie_or_url_param_value(handler, 'debug')
 
-        self.mode_values = debug_value.split(',') if debug_value is not None else ''
-        self.inherited = handler.request.headers.get(DEBUG_HEADER_NAME)
+        self.mode_values = debug_value.split(',') if debug_value is not None else []  # type: List[str]
+        self.inherited = bool(handler.request.headers.get(DEBUG_HEADER_NAME))
 
         if self.inherited:
             debug_log.debug('debug mode is inherited due to %s request header', DEBUG_HEADER_NAME)
