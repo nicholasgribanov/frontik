@@ -140,8 +140,8 @@ class SentryLogger:
     def __init__(self, request: 'HTTPServerRequest', function: 'Optional[Callable]', sentry_client: Client):
         self.sentry_client = sentry_client
         self.request = request
-        self._user = {}
-        self._extra = {}
+        self._user = {}  # type: Dict[str, Any]
+        self._extra = {}  # type: Dict[str, Any]
 
         self._scope = Scope()
         self._scope.add_event_processor(self._event_processor)

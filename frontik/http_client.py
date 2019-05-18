@@ -12,10 +12,10 @@ from typing import TYPE_CHECKING
 import pycurl
 import logging
 from lxml import etree
+from tornado.curl_httpclient import CurlAsyncHTTPClient
 from tornado.escape import to_unicode, utf8
 from tornado.ioloop import IOLoop, PeriodicCallback
-from tornado.curl_httpclient import CurlAsyncHTTPClient
-from tornado.httpclient import AsyncHTTPClient, HTTPRequest, HTTPResponse, HTTPError
+from tornado.httpclient import HTTPRequest, HTTPResponse, HTTPError
 from tornado.httputil import HTTPHeaders
 from tornado.options import options
 
@@ -454,16 +454,14 @@ class BalancedHttpRequest:
 
 class HttpClientFactory:
     def __init__(self, application: 'FrontikApplication', upstreams):
-        AsyncHTTPClient.configure('tornado.curl_httpclient.CurlAsyncHTTPClient', max_clients=options.max_http_clients)
-
-        self.tornado_http_client = AsyncHTTPClient()
+        self.tornado_http_client = CurlAsyncHTTPClient(max_clients=options.max_http_clients)
         self.hostname = socket.gethostname()
 
         if options.max_http_clients_connects is not None:
             self.tornado_http_client._multi.setopt(pycurl.M_MAXCONNECTS, options.max_http_clients_connects)
 
         self.application = application
-        self.upstreams = {}  # type: Dict[Upstream]
+        self.upstreams = {}  # type: Dict[str, Upstream]
 
         for name, upstream in upstreams.items():
             servers = [Server.from_config(s) for s in upstream['servers']]
@@ -692,10 +690,9 @@ class HttpClient:
 
         request.headers['x-request-id'] = get_request_id()
 
-        if isinstance(self.http_client_impl, CurlAsyncHTTPClient):
-            request.prepare_curl_callback = partial(
-                self._prepare_curl_callback, next_callback=request.prepare_curl_callback
-            )
+        request.prepare_curl_callback = partial(
+            self._prepare_curl_callback, next_callback=request.prepare_curl_callback
+        )
 
         return request
 

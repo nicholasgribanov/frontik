@@ -1,10 +1,13 @@
 import json
-from typing import Any, Type
+from typing import TYPE_CHECKING
 
 from tornado.concurrent import Future
 
+if TYPE_CHECKING:
+    from typing import Any, Dict, List, Type
 
-def _encode_value(v: Any) -> Any:
+
+def _encode_value(v: 'Any') -> 'Any':
     def _encode_iterable(l):
         return [_encode_value(v) for v in l]
 
@@ -45,11 +48,11 @@ class FrontikJsonEncoder(json.JSONEncoder):
 class JsonBuilder:
     __slots__ = ('_data', '_encoder', 'root_node')
 
-    def __init__(self, json_encoder: Type[FrontikJsonEncoder] = None):
-        self._data = []
+    def __init__(self, json_encoder: 'Type[FrontikJsonEncoder]' = None):
+        self._data = []  # type: List[Any]
         self._encoder = json_encoder
 
-    def put(self, chunk) -> 'JsonBuilder':
+    def put(self, chunk: 'Any') -> 'JsonBuilder':
         """Append a chunk of data to JsonBuilder."""
         self._data.append(chunk)
         return self
@@ -65,12 +68,12 @@ class JsonBuilder:
         self.put(chunk)
         return self
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> 'Dict[str, Any]':
         """ Return plain dict from all data appended to JsonBuilder """
         return _encode_value(self._concat_chunks())
 
-    def _concat_chunks(self) -> dict:
-        result = {}
+    def _concat_chunks(self) -> 'Dict[str, Any]':
+        result = {}  # type: Dict[str, Any]
         for chunk in self._data:
             if isinstance(chunk, Future) or hasattr(chunk, 'to_dict'):
                 chunk = _encode_value(chunk)

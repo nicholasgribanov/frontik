@@ -28,7 +28,7 @@ from frontik.version import version as frontik_version
 
 if TYPE_CHECKING:  # pragma: no cover
     from types import MethodType, TracebackType
-    from typing import Any, Callable, Coroutine, List, Optional, Type
+    from typing import Any, Callable, Coroutine, List, Optional, Tuple, Type
 
     from aiokafka import AIOKafkaProducer
     from tornado.httputil import HTTPServerRequest
@@ -86,7 +86,7 @@ class PageHandler(RequestHandler):
         self.log = handler_logger
 
         self.text = None
-        self.renderers = []  # type: List[Renderer]
+        self.renderers = []  # type: List[Tuple[int, Renderer]]
         self.register_renderer(GenericRenderer(self), RendererPriority.GENERIC)
 
         super().__init__(application, request, **kwargs)
@@ -99,7 +99,7 @@ class PageHandler(RequestHandler):
         for integration in application.available_integrations:
             integration.initialize_handler(self)
 
-        self._debug_access = None
+        self._debug_access = None  # type: Optional[bool]
         self._render_postprocessors = []  # type: List[RenderPostprocessor]
         self._postprocessors = []  # type: List[Postprocessor]
 

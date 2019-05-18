@@ -6,12 +6,17 @@ import time
 import warnings
 from logging import StreamHandler
 from logging.handlers import SysLogHandler, WatchedFileHandler
-from typing import List
+from typing import TYPE_CHECKING
 
 from tornado.log import LogFormatter
 from tornado.options import options
 
 from frontik import request_context
+
+if TYPE_CHECKING:
+    from logging import Handler, Logger
+    from typing import List, Optional, Tuple, Union
+
 
 ROOT_LOGGER = logging.root
 JSON_REQUESTS_LOGGER = logging.getLogger('requests')
@@ -147,13 +152,14 @@ def get_text_formatter():
     return _TEXT_FORMATTER
 
 
-def bootstrap_logger(logger_info, logger_level, use_json_formatter=True, formatter=None):
+def bootstrap_logger(logger_info: 'Union[Tuple[Logger, str], str]', logger_level: 'Union[str, int]',
+                     use_json_formatter: bool = True, formatter: 'Optional[LogFormatter]' = None) -> 'Logger':
     if isinstance(logger_info, tuple):
         logger, logger_name = logger_info
     else:
         logger, logger_name = logging.getLogger(logger_info), logger_info
 
-    handlers = []
+    handlers = []  # type: List[Handler]
 
     handlers.extend(_bootstrap_file(logger_name, use_json_formatter, formatter))
     handlers.extend(_bootstrap_stderr(formatter))
@@ -169,58 +175,61 @@ def bootstrap_logger(logger_info, logger_level, use_json_formatter=True, formatt
     return logger
 
 
-def _bootstrap_file(logger_name, use_json_formatter, formatter) -> List[WatchedFileHandler]:
-    if options.log_dir:
-        file_handler = logging.handlers.WatchedFileHandler(os.path.join(options.log_dir, f'{logger_name}.log'))
+def _bootstrap_file(logger_name: str, use_json_formatter: bool,
+                    formatter: 'Optional[LogFormatter]') -> 'List[WatchedFileHandler]':
+    if not options.log_dir:
+        return []
+
+    file_handler = logging.handlers.WatchedFileHandler(os.path.join(options.log_dir, f'{logger_name}.log'))
+    if use_json_formatter:
+        file_handler.setFormatter(_JSON_FORMATTER)
+    elif formatter is not None:
+        file_handler.setFormatter(formatter)
+    else:
+        file_handler.setFormatter(get_text_formatter())
+        file_handler.addFilter(_CONTEXT_FILTER)
+
+    return [file_handler]
+
+
+def _bootstrap_stderr(formatter: 'Optional[LogFormatter]') -> 'List[StreamHandler]':
+    if not options.stderr_log:
+        return []
+
+    stderr_handler = StreamHandler()
+    if formatter is not None:
+        stderr_handler.setFormatter(formatter)
+    else:
+        stderr_handler.setFormatter(get_stderr_formatter())
+
+    return [stderr_handler]
+
+
+def _bootstrap_syslog(logger_name: str, use_json_formatter: bool,
+                      formatter: 'Optional[LogFormatter]') -> 'List[SysLogHandler]':
+    if not options.syslog:
+        return []
+
+    try:
+        syslog_handler = SysLogHandler(
+            address=(options.syslog_host, options.syslog_port),
+            facility=SysLogHandler.facility_names[options.syslog_facility],
+            socktype=socket.SOCK_DGRAM
+        )
+        syslog_handler.ident = f'{logger_name}: '
         if use_json_formatter:
-            file_handler.setFormatter(_JSON_FORMATTER)
+            syslog_handler.setFormatter(_JSON_FORMATTER)
         elif formatter is not None:
-            file_handler.setFormatter(formatter)
+            syslog_handler.setFormatter(formatter)
         else:
-            file_handler.setFormatter(get_text_formatter())
-            file_handler.addFilter(_CONTEXT_FILTER)
+            syslog_handler.setFormatter(get_text_formatter())
+            syslog_handler.addFilter(_CONTEXT_FILTER)
 
-        return [file_handler]
+        return [syslog_handler]
 
-    return []
-
-
-def _bootstrap_stderr(formatter) -> List[StreamHandler]:
-    if options.stderr_log:
-        stderr_handler = StreamHandler()
-        if formatter is not None:
-            stderr_handler.setFormatter(formatter)
-        else:
-            stderr_handler.setFormatter(get_stderr_formatter())
-
-        return [stderr_handler]
-
-    return []
-
-
-def _bootstrap_syslog(logger_name, use_json_formatter, formatter) -> List[SysLogHandler]:
-    if options.syslog:
-        try:
-            syslog_handler = SysLogHandler(
-                address=(options.syslog_host, options.syslog_port),
-                facility=SysLogHandler.facility_names[options.syslog_facility],
-                socktype=socket.SOCK_DGRAM
-            )
-            syslog_handler.ident = f'{logger_name}: '
-            if use_json_formatter:
-                syslog_handler.setFormatter(_JSON_FORMATTER)
-            elif formatter is not None:
-                syslog_handler.setFormatter(formatter)
-            else:
-                syslog_handler.setFormatter(get_text_formatter())
-                syslog_handler.addFilter(_CONTEXT_FILTER)
-
-            return [syslog_handler]
-
-        except socket.error:
-            logging.getLogger('frontik.logging').exception('cannot initialize syslog')
-
-    return []
+    except socket.error:
+        logging.getLogger('loggers').exception('cannot initialize syslog')
+        return []
 
 
 def bootstrap_core_logging():
