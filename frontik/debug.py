@@ -25,7 +25,7 @@ from frontik import media_types, request_context
 from frontik.loggers import BufferedHandler
 from frontik.util import _decode_bytes_from_charset, any_to_unicode, get_cookie_or_url_param_value
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from typing import List
 
 DEBUG_HEADER_NAME = 'x-hh-debug'

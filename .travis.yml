@@ -35,7 +35,7 @@ matrix:
 install:
   - if [[ $OSX != 1 ]]; then sudo apt-get install libgnutls28-dev libcurl4-gnutls-dev; fi
   - if [[ $TORNADO_VERSION == 'HH' ]]; then pip3 install https://github.com/hhru/tornado/archive/master.zip; else pip3 install tornado==$TORNADO_VERSION; fi
-  - if [[ $WITH_EXTRAS == 1 ]]; then pip3 install raven aiokafka; fi
+  - if [[ $WITH_EXTRAS == 1 ]]; then pip3 install sentry-sdk aiokafka aiostatsd; fi
   - python3 setup.py install
 script:
   - if [[ -n $WITH_COVERAGE ]]; then ./coverage-run.sh && coveralls; else python3 setup.py test; fi

@@ -1,150 +1,69 @@
-import socket
-import collections
+import asyncio
 from asyncio import Future
-from typing import Optional
+from typing import TYPE_CHECKING
 
-from tornado.ioloop import IOLoop
+from aiostatsd.client import StatsdClient
 
 from frontik.integrations import Integration, integrations_logger
 from frontik.options import options
+
+if TYPE_CHECKING:  # pragma: no cover
+    from asyncio import Future
+    from typing import Dict, Optional
+
+    from frontik.app import FrontikApplication
+    from frontik.handler import PageHandler
 
 
 class StatsdIntegration(Integration):
     def __init__(self):
         self.statsd_client = None
 
-    def initialize_app(self, app) -> Optional[Future]:
-        if options.statsd_host is None or options.statsd_port is None:
-            self.statsd_client = StatsDClientStub()
+    def initialize_app(self, app: 'FrontikApplication') -> 'Optional[Future]':
+        if options.statsd_host is not None and options.statsd_port is not None:
+            self.statsd_client = StatsdClientWithTags(
+                options.statsd_host, options.statsd_port,
+                packet_size=options.statsd_packet_size_bytes, flush_interval=options.statsd_flush_interval_sec,
+                default_tags={'app': app.app}
+            )
+            asyncio.create_task(self.statsd_client.run())
+        else:
             integrations_logger.info(
                 'statsd integration is disabled: statsd_host / statsd_port options are not configured'
             )
-        else:
-            self.statsd_client = StatsDClient(options.statsd_host, options.statsd_port, app=app.app)
 
         app.get_statsd_client = lambda: self.statsd_client
         return None
 
-    def initialize_handler(self, handler):
+    def initialize_handler(self, handler: 'PageHandler') -> None:
         handler.get_statsd_client = lambda: self.statsd_client
 
 
-def _convert_tag(name, value):
-    return '{}_is_{}'.format(name.replace('.', '-'), str(value).replace('.', '-'))
+def _convert_tag(name: str, value: str) -> str:
+    name = name.replace('.', '-')
+    value = str(value).replace('.', '-')
+    return f'{name}_is_{value}'
 
 
-def _convert_tags(tags):
+def _build_metric(aspect: str, tags: 'Dict[str, str]') -> str:
     if not tags:
-        return ''
+        return aspect
 
-    return '.' + '.'.join(_convert_tag(name, value) for name, value in tags.items() if value is not None)
+    tags_str = '.'.join(_convert_tag(name, value) for name, value in tags.items() if value is not None)
 
-
-def _encode_str(some):
-    return some if isinstance(some, (bytes, bytearray)) else some.encode('utf-8')
+    return f'{aspect}.{tags_str}'
 
 
-class StatsDClientStub:
-    def __init__(self):
-        pass
-
-    def stack(self):
-        pass
-
-    def flush(self):
-        pass
+class StatsdClientWithTags(StatsdClient):
+    def __init__(self, host, port, packet_size=16 * 1024, flush_interval=1, default_tags=None):
+        super().__init__(host, port, packet_size=packet_size, flush_interval=flush_interval)
+        self.default_tags = default_tags
 
     def count(self, aspect, delta, **kwargs):
-        pass
+        self.send_counter(_build_metric(aspect, dict(self.default_tags, **kwargs)), delta)
 
     def time(self, aspect, value, **kwargs):
-        pass
+        self.send_timer(_build_metric(aspect, dict(self.default_tags, **kwargs)), value)
 
     def gauge(self, aspect, value, **kwargs):
-        pass
-
-
-class StatsDClient:
-    def __init__(self, host, port, app=None, max_udp_size=508, reconnect_timeout=2):
-        self.host = host
-        self.port = port
-        self.app = app
-        self.max_udp_size = max_udp_size
-        self.reconnect_timeout = reconnect_timeout
-        self.buffer = collections.deque()
-        self.stacking = False
-        self.socket = None
-
-        self._connect()
-
-    def _connect(self):
-        integrations_logger.info('statsd: connecting to %s:%d', self.host, self.port)
-
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.socket.setblocking(False)
-
-        try:
-            self.socket.connect((self.host, self.port))
-        except socket.error as e:
-            integrations_logger.warning('statsd: connect error: %s', e)
-            self._close()
-            return
-
-    def _close(self):
-        self.socket.close()
-        self.socket = None
-        IOLoop.current().add_timeout(IOLoop.current().time() + self.reconnect_timeout, self._connect)
-
-    def _send(self, message):
-        if len(message) > self.max_udp_size:
-            integrations_logger.debug('statsd: message %s is too long, dropping', message)
-
-        if self.stacking:
-            self.buffer.append(message)
-            return
-
-        self._write(message)
-
-    def _write(self, data):
-        if self.socket is None:
-            integrations_logger.debug('statsd: trying to write to closed socket, dropping')
-            return
-
-        try:
-            self.socket.send(_encode_str(data))
-        except (socket.error, IOError, OSError) as e:
-            integrations_logger.warning('statsd: writing error: %s', e)
-            self._close()
-
-    def stack(self):
-        self.buffer.clear()
-        self.stacking = True
-
-    def flush(self):
-        self.stacking = False
-
-        if not self.buffer:
-            return
-
-        data = self.buffer.popleft()
-
-        while self.buffer:
-            message = self.buffer.popleft()
-
-            if len(data) + len(message) < self.max_udp_size:
-                data += '\n' + message
-                continue
-
-            self._write(data)
-            data = message
-
-        self._write(data)
-
-    def count(self, aspect, delta, **kwargs):
-        self._send('{}{}:{}|c'.format(aspect, _convert_tags(dict(kwargs, app=self.app)), delta))
-
-    def time(self, aspect, value, **kwargs):
-        self._send('{}{}:{}|ms'.format(aspect, _convert_tags(dict(kwargs, app=self.app)), value))
-
-    def gauge(self, aspect, value, **kwargs):
-        self._send('{}{}:{}|g'.format(aspect, _convert_tags(dict(kwargs, app=self.app)), value))
+        self.send_gauge(_build_metric(aspect, dict(self.default_tags, **kwargs)), value)

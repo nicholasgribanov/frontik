@@ -146,7 +146,6 @@ def main(config_file=None):
     )
 
     try:
-        app = app_class(app_root=os.path.dirname(module.__file__), **options.as_dict())
         ioloop = IOLoop.current()
 
         executor = ThreadPoolExecutor(options.common_executor_pool_size)
@@ -154,6 +153,7 @@ def main(config_file=None):
 
         async def async_init():
             try:
+                app = app_class(app_root=os.path.dirname(module.__file__), **options.as_dict())
                 init_futures = app.default_init_futures + list(app.init_async())
                 await asyncio.gather(*init_futures)
                 run_server(app)
@@ -166,5 +166,5 @@ def main(config_file=None):
         ioloop.start()
 
     except BaseException:
-        log.exception('frontik application exited with exception')
+        log.exception('failed to initialize application')
         sys.exit(1)

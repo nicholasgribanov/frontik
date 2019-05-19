@@ -62,6 +62,8 @@ define('kafka_clusters', default={}, type=dict)
 
 define('statsd_host', default=None, type=str)
 define('statsd_port', default=None, type=int)
+define('statsd_flush_interval_sec', default=1, type=float)
+define('statsd_packet_size_bytes', default=16 * 1024, type=int)
 define('gc_metrics_send_interval_ms', default=None, type=int)
 
 define('timeout_multiplier', default=1.0, type=float)

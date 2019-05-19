@@ -13,7 +13,7 @@ from tornado.options import options
 
 from frontik import request_context
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from logging import Handler, Logger
     from typing import List, Optional, Tuple, Union
 

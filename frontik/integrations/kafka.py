@@ -7,16 +7,19 @@ from tornado import gen
 from frontik.integrations import Integration
 from frontik.options import options
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from asyncio import Future
     from typing import Optional
+
+    from frontik.app import FrontikApplication
+    from frontik.handler import PageHandler
 
 
 class KafkaIntegration(Integration):
     def __init__(self):
         self.kafka_producers = {}
 
-    def initialize_app(self, app) -> 'Optional[Future]':
+    def initialize_app(self, app: 'FrontikApplication') -> 'Optional[Future]':
         def get_kafka_producer(producer_name: str) -> 'Optional[AIOKafkaProducer]':
             return self.kafka_producers.get(producer_name)
 
@@ -35,5 +38,5 @@ class KafkaIntegration(Integration):
 
         return None
 
-    def initialize_handler(self, handler):
+    def initialize_handler(self, handler: 'PageHandler') -> None:
         handler.get_kafka_producer = handler.application.get_kafka_producer

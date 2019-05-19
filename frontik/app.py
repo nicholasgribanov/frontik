@@ -28,7 +28,7 @@ if TYPE_CHECKING:  # pragma: no cover
 
     from frontik.integrations.kafka import AIOKafkaProducer
     from frontik.integrations.sentry import SentryLogger
-    from frontik.integrations.statsd import StatsDClient
+    from frontik.integrations.statsd import StatsdClientWithTags
 
 
 class VersionHandler(RequestHandler):
@@ -58,7 +58,7 @@ class FrontikApplication(Application):
         self.json_renderer_factory = json_renderer.JsonRendererFactory(self)
         self.jinja_renderer_factory = jinja_renderer.JinjaRendererFactory(self)
 
-        self.http_client_factory = HttpClientFactory(self, getattr(self.config, 'http_upstreams', {}))
+        self.http_client_factory = HttpClientFactory(getattr(self.config, 'http_upstreams', {}))
 
         self.router = FrontikRouter(self)
         self.available_integrations, self.default_init_futures = integrations.load_integrations(self)
@@ -167,5 +167,5 @@ class FrontikApplication(Application):
     def get_kafka_producer(self, producer_name: str) -> 'Optional[AIOKafkaProducer]':  # pragma: no cover
         pass
 
-    def get_statsd_client(self) -> 'Optional[StatsDClient]':  # pragma: no cover
+    def get_statsd_client(self) -> 'Optional[StatsdClientWithTags]':  # pragma: no cover
         pass

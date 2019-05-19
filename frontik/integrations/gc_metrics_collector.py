@@ -1,18 +1,31 @@
 import gc
 import time
-from asyncio import Future
 from functools import partial
-from typing import Optional
+from typing import TYPE_CHECKING
 
 from tornado.ioloop import PeriodicCallback
 
 from frontik.integrations import Integration, integrations_logger
 from frontik.options import options
 
+if TYPE_CHECKING:  # pragma: no cover
+    from asyncio import Future
+    from typing import Optional
+
+    from frontik.app import FrontikApplication
+    from frontik.handler import PageHandler
+
 
 class GCMetricsCollectorIntegration(Integration):
-    def initialize_app(self, app) -> Optional[Future]:
-        if options.gc_metrics_send_interval_ms is None or options.gc_metrics_send_interval_ms <= 0:
+    def initialize_app(self, app: 'FrontikApplication') -> 'Optional[Future]':
+        statsd_client = app.get_statsd_client()
+        gc_metrics_send_interval_ms = options.gc_metrics_send_interval_ms
+
+        if statsd_client is None:
+            integrations_logger.info('GC metrics collector integration is disabled: statsd client is not configured')
+            return
+
+        if gc_metrics_send_interval_ms is None or gc_metrics_send_interval_ms <= 0:
             integrations_logger.info(
                 'GC metrics collector integration is disabled: gc_metrics_send_interval_ms option is not configured'
             )
@@ -20,40 +33,35 @@ class GCMetricsCollectorIntegration(Integration):
 
         gc.callbacks.append(gc_metrics_collector)
 
-        periodic_callback = PeriodicCallback(partial(send_metrics, app), options.gc_metrics_send_interval_ms)
-        periodic_callback.start()
+        PeriodicCallback(partial(send_metrics, app.get_statsd_client()), gc_metrics_send_interval_ms).start()
 
-    def initialize_handler(self, handler):
+    def initialize_handler(self, handler: 'PageHandler') -> None:
         pass
 
 
 class GCStats:
-    __slots__ = ('start', 'duration', 'count')
-
-    def __init__(self):
-        self.start = None
-        self.duration = 0
-        self.count = 0
-
-
-GC_STATS = GCStats()
+    start = None
+    duration = 0
+    count = 0
 
 
 def gc_metrics_collector(phase, info):
     if phase == 'start':
-        GC_STATS.start = time.time()
-    elif phase == 'stop' and GC_STATS.start is not None:
-        GC_STATS.duration += time.time() - GC_STATS.start
-        GC_STATS.count += 1
+        GCStats.start = time.time()
+    elif phase == 'stop' and GCStats.start is not None:
+        GCStats.duration += time.time() - GCStats.start
+        GCStats.count += 1
 
 
-def send_metrics(app):
+def send_metrics(app: 'FrontikApplication') -> None:
     statsd_client = app.get_statsd_client()
+    if statsd_client is None:
+        return
 
-    if GC_STATS.count == 0:
+    if GCStats.count == 0:
         statsd_client.time('gc.duration', 0)
         statsd_client.count('gc.count', 0)
     else:
-        statsd_client.time('gc.duration', int(GC_STATS.duration * 1000))
-        statsd_client.count('gc.count', GC_STATS.count)
-        GC_STATS.duration = GC_STATS.count = 0
+        statsd_client.time('gc.duration', int(GCStats.duration * 1000))
+        statsd_client.count('gc.count', GCStats.count)
+        GCStats.duration = GCStats.count = 0

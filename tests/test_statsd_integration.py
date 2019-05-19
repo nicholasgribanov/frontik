@@ -16,7 +16,7 @@ class TestStatsdIntegration(unittest.TestCase):
 
         test_app = FrontikTestInstance(
             './frontik-test --app=tests.projects.test_app --config=tests/projects/frontik_debug.cfg '
-            f'--statsd_host=127.0.0.1 --statsd_port={port}'
+            f'--statsd_host=127.0.0.1 --statsd_port={port} --statsd_flush_interval_sec=0.01 --stderr_log=true'
         )
 
         test_app.get_page('statsd')
@@ -35,6 +35,7 @@ class TestStatsdIntegration(unittest.TestCase):
 
         metrics = '\n'.join(metrics).split('\n')
 
-        self.assertIn('count_metric.tag1_is_tag1.tag2_is_tag2.app_is_tests-projects-test_app:10|c', metrics)
-        self.assertIn('gauge_metric.tag_is_tag3.app_is_tests-projects-test_app:100|g', metrics)
-        self.assertIn('time_metric.tag_is_tag4.app_is_tests-projects-test_app:1000|ms', metrics)
+        self.assertIn('count_metric.app_is_tests-projects-test_app.tag1_is_tag1.tag2_is_tag2:10|c', metrics)
+        self.assertIn('gauge_metric.app_is_tests-projects-test_app.tag_is_tag3:100|g', metrics)
+        self.assertIn('time_metric.app_is_tests-projects-test_app.tag_is_tag4:1000|ms', metrics)
+        self.assertIn('time_metric2.app_is_tests-projects-test_app:5|ms', metrics)

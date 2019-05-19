@@ -55,6 +55,7 @@ setup(
     extras_require={
         'sentry': ['sentry-sdk'],
         'kafka': ['aiokafka'],
+        'statsd': ['aiostatsd'],
     },
     zip_safe=False
 )

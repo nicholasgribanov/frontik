@@ -1,7 +1,13 @@
 import logging
+from typing import TYPE_CHECKING
 
 from tornado.options import options
 from tornado.web import HTTPError
+
+if TYPE_CHECKING:  # pragma: no cover
+    from typing import Optional
+
+    from frontik.integrations.statsd import StatsdClientWithTags
 
 handlers_count_logger = logging.getLogger('handlers_count')
 
@@ -10,7 +16,7 @@ class ActiveHandlersLimit:
     count = 0
     high_watermark_ratio = 0.75
 
-    def __init__(self, statsd_client):
+    def __init__(self, statsd_client: 'Optional[StatsdClientWithTags]'):
         self._acquired = False
         self._statsd_client = statsd_client
         self._high_watermark = int(options.max_active_handlers * self.high_watermark_ratio)
@@ -34,10 +40,12 @@ class ActiveHandlersLimit:
         if not self._acquired:
             ActiveHandlersLimit.count += 1
             self._acquired = True
-            self._statsd_client.gauge('handler.active_count', ActiveHandlersLimit.count)
+            if self._statsd_client is not None:
+                self._statsd_client.gauge('handler.active_count', ActiveHandlersLimit.count)
 
     def release(self):
         if self._acquired:
             ActiveHandlersLimit.count -= 1
             self._acquired = False
-            self._statsd_client.gauge('handler.active_count', ActiveHandlersLimit.count)
+            if self._statsd_client is not None:
+                self._statsd_client.gauge('handler.active_count', ActiveHandlersLimit.count)

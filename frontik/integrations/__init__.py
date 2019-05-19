@@ -1,13 +1,19 @@
 import importlib
 import logging
 import pkgutil
-from asyncio import Future
-from typing import List, Optional, Tuple
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # pragma: no cover
+    from asyncio import Future
+    from typing import List, Optional, Tuple
+
+    from frontik.app import FrontikApplication
+    from frontik.handler import PageHandler
 
 integrations_logger = logging.getLogger('integrations')
 
 
-def load_integrations(app) -> Tuple[List['Integration'], List[Future]]:
+def load_integrations(app) -> 'Tuple[List[Integration], List[Future]]':
     for _, module_name, _ in pkgutil.iter_modules(__path__):
         try:
             importlib.import_module(f'frontik.integrations.{module_name}')
@@ -29,8 +35,8 @@ def load_integrations(app) -> Tuple[List['Integration'], List[Future]]:
 
 
 class Integration:
-    def initialize_app(self, app) -> Optional[Future]:
+    def initialize_app(self, app: 'FrontikApplication') -> 'Optional[Future]':
         raise NotImplementedError()  # pragma: no cover
 
-    def initialize_handler(self, handler):
+    def initialize_handler(self, handler: 'PageHandler'):
         raise NotImplementedError()  # pragma: no cover

@@ -36,7 +36,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from frontik.app import FrontikApplication
     from frontik.http_client import BalancedHttpRequest, HttpClient
     from frontik.integrations.sentry import SentryLogger
-    from frontik.integrations.statsd import StatsDClient
+    from frontik.integrations.statsd import StatsdClientWithTags
 
     RenderPostprocessor = Callable[['PageHandler', str], Coroutine[None, None, None]]
     Postprocessor = Callable[['PageHandler'], Coroutine[None, None, None]]
@@ -634,7 +634,7 @@ class PageHandler(RequestHandler):
     def get_kafka_producer(self, producer_name: str) -> 'Optional[AIOKafkaProducer]':  # pragma: no cover
         pass
 
-    def get_statsd_client(self) -> 'Optional[StatsDClient]':  # pragma: no cover
+    def get_statsd_client(self) -> 'Optional[StatsdClientWithTags]':  # pragma: no cover
         pass
 
 

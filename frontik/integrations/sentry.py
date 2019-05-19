@@ -2,9 +2,8 @@ import asyncio
 import json
 import logging
 import random
-from asyncio import Future
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional, Tuple, Type, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from sentry_sdk.client import Client
 from sentry_sdk.hub import Hub
@@ -17,17 +16,18 @@ from tornado.web import HTTPError
 
 from frontik import media_types
 from frontik.integrations import Integration, integrations_logger
-from frontik.handler import PageHandler
 from frontik.http_client import FailFastError
 from frontik.options import options
 
 if TYPE_CHECKING:  # pragma: no cover
-    from typing import Callable
+    from asyncio import Future
+    from typing import Any, Callable, Dict, Optional, Tuple, Type, Union
 
     from sentry_sdk.consts import ClientOptions
     from tornado.httputil import HTTPServerRequest
 
     from frontik.app import FrontikApplication
+    from frontik.handler import PageHandler
 
     ExcInfo = Tuple[
         Optional[Type[BaseException]], Optional[BaseException], Optional[Any]
@@ -40,7 +40,7 @@ class SentryIntegration(Integration):
     def __init__(self):
         self.sentry_client = None
 
-    def initialize_app(self, app: 'FrontikApplication') -> Optional[Future]:
+    def initialize_app(self, app: 'FrontikApplication') -> 'Optional[Future]':
         if not options.sentry_dsn:
             integrations_logger.info('sentry integration is disabled: sentry_dsn option is not configured')
             return None
@@ -64,7 +64,7 @@ class SentryIntegration(Integration):
 
         return None
 
-    def initialize_handler(self, handler):
+    def initialize_handler(self, handler: 'PageHandler') -> None:
         if self.sentry_client is None:
             return
 
@@ -99,7 +99,7 @@ class FrontikTransport(Transport):
         self._auth = self.parsed_dsn.to_auth(app.app)  # type: Auth
         self._http_client = app.http_client_factory.tornado_http_client  # type: AsyncHTTPClient
 
-    def capture_event(self, event: Dict[str, Any]) -> None:
+    def capture_event(self, event: 'Dict[str, Any]') -> None:
         if self._disabled_until is not None:
             if datetime.utcnow() < self._disabled_until:
                 return
@@ -108,7 +108,7 @@ class FrontikTransport(Transport):
         asyncio.get_event_loop().create_task(self._send_event(event))
 
     @staticmethod
-    def before_send(event: Dict[str, Any], hint: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def before_send(event: 'Dict[str, Any]', hint: 'Dict[str, Any]') -> 'Optional[Dict[str, Any]]':
         try:
             sample_rate = float(event.get('extra', {}).get('sample_rate', 1.0))
             if sample_rate < 1.0 and random.random() >= sample_rate:
@@ -118,7 +118,7 @@ class FrontikTransport(Transport):
 
         return event
 
-    async def _send_event(self, event: Dict[str, Any]):
+    async def _send_event(self, event: 'Dict[str, Any]'):
         response = await self._http_client.fetch(
             self._auth.store_api_url,
             raise_error=False,
@@ -163,13 +163,13 @@ class SentryLogger:
     def extra(self, extra_data):
         self._extra = extra_data
 
-    def capture_exception(self, error: Optional[Union[BaseException, 'ExcInfo']] = None) -> Optional[str]:
+    def capture_exception(self, error: 'Optional[Union[BaseException, ExcInfo]]' = None) -> 'Optional[str]':
         self._update_scope()
 
         with Hub(self.sentry_client, self._scope) as hub:
             return hub.capture_exception(error)
 
-    def capture_message(self, message: str, level: Optional[str] = None) -> Optional[str]:
+    def capture_message(self, message: str, level: 'Optional[str]' = None) -> 'Optional[str]':
         self._update_scope()
 
         with Hub(self.sentry_client, self._scope) as hub:
@@ -180,7 +180,7 @@ class SentryLogger:
         for k, v in self._extra.items():
             self._scope.set_extra(k, v)
 
-    def _event_processor(self, event: Dict[str, Any], hint: Dict[str, Any]) -> Dict[str, Any]:
+    def _event_processor(self, event: 'Dict[str, Any]', hint: 'Dict[str, Any]') -> 'Dict[str, Any]':
         extractor = TornadoRequestExtractor(self.request)
         extractor.extract_into_event(event)
 

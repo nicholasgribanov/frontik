@@ -25,10 +25,12 @@ from frontik.request_context import get_request_id
 from frontik.util import make_url, make_body, make_mfd
 
 if TYPE_CHECKING:  # pragma: no cover
-    from typing import Dict
+    from typing import Any, Dict, Optional
 
-    from frontik.app import FrontikApplication
+    from aiokafka.producer import AIOKafkaProducer
+
     from frontik.handler import PageHandler
+    from frontik.integrations.statsd import StatsdClientWithTags
 
 
 def HTTPResponse__repr__(self):
@@ -453,14 +455,13 @@ class BalancedHttpRequest:
 
 
 class HttpClientFactory:
-    def __init__(self, application: 'FrontikApplication', upstreams):
+    def __init__(self, upstreams: 'Dict[str, Any]'):
         self.tornado_http_client = CurlAsyncHTTPClient(max_clients=options.max_http_clients)
         self.hostname = socket.gethostname()
 
         if options.max_http_clients_connects is not None:
             self.tornado_http_client._multi.setopt(pycurl.M_MAXCONNECTS, options.max_http_clients_connects)
 
-        self.application = application
         self.upstreams = {}  # type: Dict[str, Upstream]
 
         for name, upstream in upstreams.items():
@@ -485,7 +486,7 @@ class HttpClientFactory:
 
     def get_http_client(self, handler: 'PageHandler', modify_http_request_hook):
         kafka_producer = (
-            self.application.get_kafka_producer(self._kafka_cluster) if self._send_metrics_to_kafka else None
+            handler.get_kafka_producer(self._kafka_cluster) if self._send_metrics_to_kafka else None
         )
 
         if self._metrics_callback is None:
@@ -526,12 +527,9 @@ class HttpClientFactory:
         upstream.update(upstream_config, servers)
         http_client_logger.info('update %s upstream: %s', name, str(upstream))
 
-    def _statsd_metrics_callback(self):
-        statsd_client = self.application.get_statsd_client()
-        statsd_client.stack()
+    def _statsd_metrics_callback(self, statsd_client: 'StatsdClientWithTags'):
         statsd_client.gauge('http.client.max_clients', options.max_http_clients)
         statsd_client.gauge('http.client.free_clients', len(self.tornado_http_client._free_list))
-        statsd_client.flush()
 
 
 class ParseMode(IntEnum):
@@ -542,7 +540,7 @@ class ParseMode(IntEnum):
 
 class HttpClient:
     def __init__(self, http_client_impl, debug_mode, modify_http_request_hook, upstreams,
-                 statsd_client, kafka_producer):
+                 statsd_client: 'Optional[StatsdClientWithTags]', kafka_producer: 'Optional[AIOKafkaProducer]'):
         self.http_client_impl = http_client_impl
         self.debug_mode = debug_mode
         self.modify_http_request_hook = modify_http_request_hook
@@ -614,7 +612,7 @@ class HttpClient:
         future = Future()  # type: 'Future[RequestResult]'
 
         def request_finished_callback(response):
-            if balanced_request.tried_hosts is not None:
+            if balanced_request.tried_hosts is not None and self.statsd_client is not None:
                 self.statsd_client.count(
                     'http.client.retries', 1,
                     upstream=balanced_request.get_host(),
@@ -742,21 +740,20 @@ class HttpClient:
             if timings_info:
                 http_client_logger.info('Curl timings: %s', ' '.join(timings_info))
 
-        self.statsd_client.stack()
-        self.statsd_client.count(
-            'http.client.requests', 1,
-            upstream=balanced_request.get_host(),
-            dc=balanced_request.current_datacenter,
-            final='false' if do_retry else 'true',
-            status=response.code
-        )
-        self.statsd_client.time(
-            'http.client.request.time',
-            int(response.request_time * 1000),
-            dc=balanced_request.current_datacenter,
-            upstream=balanced_request.get_host()
-        )
-        self.statsd_client.flush()
+        if self.statsd_client is not None:
+            self.statsd_client.count(
+                'http.client.requests', 1,
+                upstream=balanced_request.get_host(),
+                dc=balanced_request.current_datacenter,
+                final='false' if do_retry else 'true',
+                status=response.code
+            )
+            self.statsd_client.time(
+                'http.client.request.time',
+                int(response.request_time * 1000),
+                dc=balanced_request.current_datacenter,
+                upstream=balanced_request.get_host()
+            )
 
         if self.kafka_producer is not None and not do_retry:
             dc = balanced_request.current_datacenter or options.datacenter or 'unknown'
