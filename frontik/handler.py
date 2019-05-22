@@ -335,7 +335,7 @@ class PageHandler(RequestHandler):
         self.log.debug('using %s renderer', renderer)
         rendered_result = await renderer.render()
 
-        postprocessed_result = await self._run_template_postprocessors(self._render_postprocessors, rendered_result)
+        postprocessed_result = await self._run_render_postprocessors(self._render_postprocessors, rendered_result)
         if postprocessed_result is not None:
             await self.finish(postprocessed_result)
 
@@ -505,7 +505,7 @@ class PageHandler(RequestHandler):
 
         return True
 
-    async def _run_template_postprocessors(self, postprocessors, rendered_template):
+    async def _run_render_postprocessors(self, postprocessors, rendered_template):
         for p in postprocessors:
             rendered_template = await p(self, rendered_template)
 
