@@ -39,9 +39,6 @@ class TestJsonBuilder(unittest.TestCase):
 
         self.assertEqual(j.to_string(), '{"c": "d"}')
 
-    def test_invalid_root_node_name(self):
-        self.assertRaises(TypeError, JsonBuilder, root_node=10)
-
     def test_list(self):
         j = JsonBuilder()
         j.put({'a': {'b': [1, 2, 3]}})
@@ -167,7 +164,8 @@ class TestJsonBuilder(unittest.TestCase):
         j.put({'a': 'b'})
         j.put(['c'])
 
-        self.assertRaises(ValueError, j.to_dict)
+        with self.assertRaises(ValueError):
+            j.to_dict()
 
     def test_to_dict(self):
         class Serializable:

@@ -130,5 +130,8 @@ class TestUtil(unittest.TestCase):
         self.assertEqual('/id/1/2', reverse_regex_named_groups(two_ids_with_ending, id1='1', id2=2))
         self.assertEqual('/id/1//2', reverse_regex_named_groups(two_ids_with_unnamed_groups, id1=1, id2='2'))
 
-        self.assertRaises(ValueError, reverse_regex_named_groups, two_ids, 1)
-        self.assertRaises(ValueError, reverse_regex_named_groups, two_ids, id1=1)
+        with self.assertRaises(ValueError):
+            reverse_regex_named_groups(two_ids, 1)
+
+        with self.assertRaises(ValueError):
+            reverse_regex_named_groups(two_ids, id1=1)

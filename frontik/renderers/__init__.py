@@ -7,16 +7,16 @@ generic_renderer_logger = logging.getLogger('generic_renderer')
 
 
 class RendererFactory:
-    def get_renderer(self, handler) -> 'Renderer':
-        raise NotImplementedError()  # pragma: no cover
+    def get_renderer(self, handler) -> 'Renderer':  # pragma: no cover
+        raise NotImplementedError()
 
 
 class Renderer:
-    def can_apply(self) -> bool:
-        raise NotImplementedError()  # pragma: no cover
+    def can_apply(self) -> bool:  # pragma: no cover
+        raise NotImplementedError()
 
-    async def render(self):
-        raise NotImplementedError()  # pragma: no cover
+    async def render(self):  # pragma: no cover
+        raise NotImplementedError()
 
     def __repr__(self):
         return '{}.{}'.format(__package__, self.__class__.__name__)

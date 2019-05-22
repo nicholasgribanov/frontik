@@ -111,7 +111,8 @@ class TestDoc(unittest.TestCase, LxmlTestCaseMixin):
         a = Doc('a')
         a.put('1')
 
-        self.assertRaises(ValueError, a.to_string)
+        with self.assertRaises(ValueError):
+            a.to_string()
 
     def test_root_node(self):
         d = Doc(root_node=etree.Element('doc'))
@@ -137,7 +138,8 @@ class TestDoc(unittest.TestCase, LxmlTestCaseMixin):
         self.assertXmlEqual(d.to_etree_element(), b"""<?xml version='1.0' encoding='utf-8'?>\n<a></a>""")
 
     def test_root_node_invalid(self):
-        self.assertRaises(TypeError, Doc, root_node=etree.Comment('invalid root doc'))
+        with self.assertRaises(TypeError):
+            Doc(root_node=etree.Comment('invalid root doc'))
 
     @staticmethod
     def get_test_request_result():

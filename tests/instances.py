@@ -5,10 +5,16 @@ import subprocess
 import sys
 import time
 from distutils.spawn import find_executable
+from typing import TYPE_CHECKING
 
 import requests
 from lxml import etree
 from tornado.escape import to_unicode, utf8
+
+if TYPE_CHECKING:  # pragma: no cover
+    from typing import Dict
+
+    from requests import Response
 
 try:
     import coverage
@@ -17,7 +23,7 @@ except ImportError:
     USE_COVERAGE = False
 
 
-def _run_command(command, port):
+def _run_command(command: str, port: int) -> subprocess.Popen:
     python = sys.executable
 
     if USE_COVERAGE:
@@ -29,7 +35,7 @@ def _run_command(command, port):
     return subprocess.Popen(executable.split())
 
 
-def find_free_port(from_port=9000, to_port=10000):
+def find_free_port(from_port: int = 9000, to_port: int = 10000) -> int:
     for port in range(from_port, to_port):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
@@ -45,7 +51,7 @@ def find_free_port(from_port=9000, to_port=10000):
     return port
 
 
-def create_basic_auth_header(credentials):
+def create_basic_auth_header(credentials: str) -> str:
     return 'Basic {}'.format(to_unicode(base64.b64encode(utf8(credentials))))
 
 
@@ -77,7 +83,7 @@ class FrontikTestInstance:
         self.popen.terminate()
         self.port = None
 
-    def get_page(self, page, notpl=False, method=requests.get, **kwargs):
+    def get_page(self, page: str, notpl: bool = False, method=requests.get, **kwargs) -> 'Response':
         if not self.port:
             self.start()
 
@@ -97,7 +103,7 @@ class FrontikTestInstance:
 
         return method(url, **kwargs)
 
-    def get_page_xml(self, page, notpl=False, method=requests.get):
+    def get_page_xml(self, page, notpl=False, method=requests.get) -> etree.Element:
         content = utf8(self.get_page(page, notpl=notpl, method=method).content)
 
         try:
@@ -105,7 +111,7 @@ class FrontikTestInstance:
         except Exception as e:
             raise Exception(f'failed to parse xml ({e}): "{content}"')
 
-    def get_page_json(self, page, notpl=False, method=requests.get):
+    def get_page_json(self, page, notpl=False, method=requests.get) -> 'Dict[Any, Any]':
         content = self.get_page_text(page, notpl=notpl, method=method)
 
         try:
