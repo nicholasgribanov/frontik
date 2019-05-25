@@ -18,6 +18,10 @@ class TestRouting(unittest.TestCase):
         html = frontik_re_app.get_page_text('simple')
         self.assertIn('ok', html)
 
+    def test_bad_routing_delegate(self):
+        response = frontik_re_app.get_page('bad_delegate')
+        self.assertEqual(500, response.status_code)
+
     def test_extra_slash_in_regex(self):
         """Routes specified with regexps should match precisely"""
         self.assertEqual(frontik_re_app.get_page('//not_simple').status_code, 404)
