@@ -1,3 +1,5 @@
+import json
+
 from lxml.builder import E
 
 from frontik import media_types
@@ -20,14 +22,21 @@ class Page(JsonPageHandler, XsltPageHandler):
             self.log.exception('exception catched')
 
         self.log.warning('warning: testing simple inherited debug')
-        self.post_url(self.request.host, self.request.path)
+        self.post_url(
+            self.request.host, self.request.path,
+            data=json.dumps({'json': True}), content_type=media_types.APPLICATION_JSON
+        )
 
         self.log.error('error: testing failing urls')
         self.get_url('invalid_host', 'invalid_url', request_timeout=0.5)
 
         self.log.info('info: testing responses')
-        self.put_url(self.request.host, self.request.path + '?type=html')
-        self.put_url(self.request.host, self.request.path + '?type=protobuf')
+        self.put_url(
+            self.request.host, self.request.path + '?type=html',
+            data={'multipart': ['form', 'data']}, content_type=media_types.APPLICATION_FORM_URLENCODED
+        )
+
+        self.put_url(self.request.host, self.request.path + '?type=protobuf&debug=nopass')
         self.put_url(self.request.host, self.request.path + '?type=xml')
         self.put_url(self.request.host, self.request.path + '?type=javascript')
 

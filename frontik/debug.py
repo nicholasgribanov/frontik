@@ -26,26 +26,30 @@ from frontik.loggers import BufferedHandler
 from frontik.util import _decode_bytes_from_charset, any_to_unicode, get_cookie_or_url_param_value
 
 if TYPE_CHECKING:  # pragma: no cover
-    from typing import List
+    from typing import Any, Dict, List, Optional, Tuple
+
+    from tornado.httpclient import HTTPRequest
+    from tornado.httputil import HTTPServerRequest
 
 DEBUG_HEADER_NAME = 'x-hh-debug'
 
 debug_log = logging.getLogger('frontik.debug')
 
 
-def response_from_debug(request, response):
-    debug_response = json.loads(response.body)
-    original_response = debug_response.get('original_response')
+def response_from_debug(request: 'HTTPRequest',
+                        response: 'HTTPResponse') -> 'Optional[Tuple[Dict[str, Any], HTTPResponse]]':
+    debug_response_json = json.loads(response.body)
+    original_response_json = debug_response_json.get('original_response')
 
-    if original_response is not None:
-        original_buffer = base64.b64decode(original_response.get('buffer', ''))
+    if original_response_json is not None:
+        original_buffer = base64.b64decode(original_response_json.get('buffer', ''))
 
         headers = HTTPHeaders(response.headers)
-        headers.update(original_response.get('headers', {}))
+        headers.update(original_response_json.get('headers', {}))
 
-        fake_response = HTTPResponse(
+        original_response = HTTPResponse(
             request,
-            int(original_response.get('code', 599)),
+            int(original_response_json.get('code', 599)),
             headers=headers,
             buffer=BytesIO(original_buffer),
             effective_url=response.effective_url,
@@ -53,44 +57,14 @@ def response_from_debug(request, response):
             time_info=response.time_info
         )
 
-        return debug_response, fake_response
+        return debug_response_json, original_response
 
     return None
 
 
-def _response_to_json(response):
+def _response_to_json(response: 'HTTPResponse') -> 'Dict[str, Any]':
     content_type = response.headers.get('Content-Type', '')
-    content_type_class = ''
-
-    if 'charset' in content_type:
-        charset = content_type.partition('=')[-1]
-    else:
-        charset = 'utf-8'
-
-    try_charsets = (charset, 'cp1251')
-
-    try:
-        if not response.body:
-            body = ''
-        elif 'text/html' in content_type:
-            content_type_class = 'html'
-            body = _decode_bytes_from_charset(response.body, try_charsets)
-        elif 'protobuf' in content_type:
-            body = repr(response.body)
-        elif 'xml' in content_type:
-            content_type_class = 'xml'
-            body = _pretty_print_xml(etree.fromstring(response.body))
-        elif 'json' in content_type:
-            content_type_class = 'javascript'
-            body = _pretty_print_json(json.loads(response.body))
-        else:
-            if 'javascript' in content_type:
-                content_type_class = 'javascript'
-            body = _decode_bytes_from_charset(response.body, try_charsets)
-
-    except Exception:
-        debug_log.exception('cannot parse response body')
-        body = repr(response.body)
+    content_type_class, body = _parse_body(response.body, content_type)
 
     time_info = {}
     try:
@@ -112,28 +86,25 @@ def _response_to_json(response):
     }
 
 
-def _request_to_json(request):
+def _server_request_to_json(request: 'HTTPServerRequest') -> 'Dict[str, Any]':
     content_type = request.headers.get('Content-Type', '')
-    body = None
-
-    if request.body:
-        try:
-            if 'json' in content_type:
-                body = _pretty_print_json(json.loads(request.body))
-            elif 'protobuf' in content_type:
-                body = repr(request.body)
-            else:
-                body = {}
-                body_query = parse_qs(request.body, True)
-                for name, values in body_query.items():
-                    for value in values:
-                        body[to_unicode(name)] = to_unicode(value)
-        except Exception:
-            debug_log.exception('cannot parse request body')
-            body = repr(request.body)
+    content_type_class, body = _parse_body(request.body, content_type)
 
     return {
         'content_type': content_type,
+        'body': body,
+        'query_params': _query_params_to_json(request.uri),
+        'headers': _headers_to_json(request.headers),
+        'cookies': _cookies_to_json(request.headers)
+    }
+
+
+def _client_request_to_json(request: 'HTTPRequest') -> 'Dict[str, Any]':
+    content_type = request.headers.get('Content-Type', '')
+    content_type_class, body = _parse_body(request.body, content_type)
+
+    return {
+        'content_type_class': content_type_class,
         'body': body,
         'start_time': request.start_time,
         'method': request.method,
@@ -143,6 +114,37 @@ def _request_to_json(request):
         'cookies': _cookies_to_json(request.headers),
         'curl': _request_to_curl_string(request)
     }
+
+
+def _parse_body(body: 'bytes', content_type: 'str') -> 'Tuple[Optional[str], str]':
+    try:
+        if 'charset' in content_type:
+            charset = content_type.partition('=')[-1]
+        else:
+            charset = 'utf-8'
+
+        try_charsets = (charset, 'cp1251')
+
+        if not body:
+            return None, ''
+
+        if 'text/html' in content_type:
+            return 'html', _decode_bytes_from_charset(body, try_charsets)
+
+        if 'protobuf' in content_type:
+            return None, repr(body)
+
+        if 'xml' in content_type:
+            return 'xml', _pretty_print_xml(etree.fromstring(body))
+
+        if 'json' in content_type:
+            return 'json', _pretty_print_json(json.loads(body))
+
+        return None, _decode_bytes_from_charset(body, try_charsets)
+
+    except Exception:
+        debug_log.exception('cannot parse body')
+        return None, repr(body)
 
 
 def _balanced_request_to_json(balanced_request, retry, rack, datacenter):
@@ -333,7 +335,7 @@ class DebugHandler(BufferedHandler):
             entry['response'] = _response_to_json(record._response)
 
         if getattr(record, '_request', None) is not None:
-            entry['request'] = _request_to_json(record._request)
+            entry['request'] = _client_request_to_json(record._request)
 
         if getattr(record, '_balanced_request', None) is not None:
             entry['balanced_request'] = _balanced_request_to_json(
@@ -419,13 +421,8 @@ class DebugTransform(OutputTransform):
             'handler_name': request_context.get_handler_name(),
             'start_time': self.request._start_time,
             'total_time': int((time.time() - self.request._start_time) * 1000),
-            'request': {
-                'method': self.request.method,
-                'query_params': _query_params_to_json(self.request.uri),
-                'headers': _headers_to_json(self.request.headers),
-                'cookies': _cookies_to_json(self.request.headers)
-            },
-            'response': {
+            'root_request': _server_request_to_json(self.request),
+            'root_response': {
                 'headers': _headers_to_json(self.headers),
                 'cookies': _cookies_to_json(self.headers)
             },

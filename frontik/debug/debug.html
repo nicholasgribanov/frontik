@@ -55,14 +55,13 @@
             </label>
             <input type="checkbox" class="details-expander" id="details_{{ block_id }}"/>
             <div class="details">
-                {{ query_params(debug_response.request.query_params) }}
-                {{ headers(debug_response.request.headers, 'request') }}
-                {{ cookies(debug_response.request.cookies, 'request') }}
-                {{ body(debug_response.request.body, 'request') }}
+                {{ query_params(debug_response.root_request.query_params) }}
+                {{ headers(debug_response.root_request.headers, 'request') }}
+                {{ cookies(debug_response.root_request.cookies, 'request') }}
+                {{ body(debug_response.root_request.body, debug_response.root_request.content_type_class, 'request') }}
 
-                {{ error(debug_response.response.error) }}
-                {{ headers(debug_response.response.headers, 'response') }}
-                {{ cookies(debug_response.response.cookies, 'response') }}
+                {{ headers(debug_response.root_response.headers, 'response') }}
+                {{ cookies(debug_response.root_response.cookies, 'response') }}
             </div>
         </div>
 
@@ -166,14 +165,14 @@
                             {{ query_params(log_entry.request.query_params) }}
                             {{ headers(log_entry.request.headers, 'request') }}
                             {{ cookies(log_entry.request.cookies, 'request') }}
-                            {{ body(log_entry.request.body, 'request') }}
+                            {{ body(log_entry.request.body, log_entry.request.content_type_class, 'request') }}
 
                             {{ error(log_entry.response.error) }}
                             {{ headers(log_entry.response.headers, 'response') }}
                             {{ cookies(log_entry.response.cookies, 'response') }}
                         {% endif %}
 
-                        {{ body(log_entry.response.body, 'response') }}
+                        {{ body(log_entry.response.body, log_entry.response.content_type_class, 'response') }}
                         {% if log_entry.exception is defined %}
                             {{ exception(log_entry.exception) }}
                         {% endif %}
@@ -232,17 +231,10 @@
         {% endif %}
     {% endmacro %}
 
-    {% macro body(body, source) %}
-        {% if body is mapping %}
-            <div class="params">
-                <div class="delimiter">{{ source }} body</div>
-                {% for param in body %}
-                    <div>{{ param[0] }} = {{ param[1] }}</div>
-                {% endfor %}
-            </div>
-        {% elif body %}
+    {% macro body(body, content_type_class, source) %}
+        {% if body %}
             <div class="delimiter">{{ source }} body</div>
-            {{ highlighted_block(body) }}
+            {{ highlighted_block(body, content_type_class) }}
         {% elif source == 'response' %}
             <div class="delimiter">{{ source }} body</div>
             Empty response
