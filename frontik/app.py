@@ -1,4 +1,5 @@
 import importlib
+import logging
 import sys
 import time
 from datetime import datetime
@@ -15,7 +16,7 @@ from frontik import integrations, request_context
 from frontik.debug import DebugTransform
 from frontik.handler import ErrorHandler
 from frontik.http_client import HttpClientFactory
-from frontik.loggers import CUSTOM_JSON_EXTRA, JSON_REQUESTS_LOGGER
+from frontik.loggers import bootstrap_logger, CUSTOM_JSON_EXTRA, JSON_REQUESTS_LOGGER
 from frontik.renderers import jinja_renderer, json_renderer, xml_renderer, xslt_renderer
 from frontik.routing import FileMappingRouter, FrontikRouter
 from frontik.version import version as frontik_version
@@ -62,6 +63,7 @@ class FrontikApplication(Application):
 
         self.router = FrontikRouter(self)
         self.available_integrations, self.default_init_futures = integrations.load_integrations(self)
+        self.slow_tasks_logger = bootstrap_logger('slow_tasks', logging.WARNING, use_json_formatter=False)
 
         super().__init__([
             (r'/version/?', VersionHandler),
@@ -158,6 +160,19 @@ class FrontikApplication(Application):
             extra['controller'] = handler_name
 
         JSON_REQUESTS_LOGGER.info('', extra={CUSTOM_JSON_EXTRA: extra})
+
+    def handle_long_asyncio_task(self, handle, duration_sec):
+        duration_ms = duration_sec * 1000
+        self.slow_tasks_logger.warning('%s took %.2f ms', handle, duration_ms)
+
+        if options.asyncio_task_critical_threshold_sec and duration_sec >= options.asyncio_task_critical_threshold_sec:
+            request = request_context.get_request() or HTTPServerRequest('GET', '/asyncio_long_task_stub')
+            sentry_logger = self.get_sentry_logger(request, None)
+            sentry_logger.update_user_info(ip='127.0.0.1')
+
+            if sentry_logger:
+                self.slow_tasks_logger.warning('no sentry logger available')
+                sentry_logger.capture_message(f'{handle} took {duration_ms:.2f} ms')
 
     # Integrations stubs
 
