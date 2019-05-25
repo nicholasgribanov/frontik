@@ -10,19 +10,19 @@ from tornado.escape import to_unicode, utf8
 from frontik import media_types
 
 if TYPE_CHECKING:  # pragma: no cover
-    from typing import Iterable, Optional
+    from typing import Any, Dict, Iterable, List, Optional, Tuple
 
     from frontik.handler import PageHandler
 
 
-def any_to_unicode(s):
+def any_to_unicode(s: 'Any') -> str:
     if isinstance(s, bytes):
         return to_unicode(s)
 
     return str(s)
 
 
-def any_to_bytes(s):
+def any_to_bytes(s: 'Any') -> bytes:
     if isinstance(s, str):
         return utf8(s)
     elif isinstance(s, bytes):
@@ -67,18 +67,10 @@ def _decode_bytes_from_charset(string: bytes, charsets: 'Iterable[str]' = ('cp12
     return decoded_body
 
 
-def choose_boundary():
-    """
-    Our embarassingly-simple replacement for mimetools.choose_boundary.
-    See https://github.com/kennethreitz/requests/blob/master/requests/packages/urllib3/filepost.py
-    """
-    return utf8(uuid4().hex)
+_BOUNDARY = utf8(uuid4().hex)
 
 
-BOUNDARY = choose_boundary()
-
-
-def make_mfd(fields, files):
+def make_mfd(fields: 'Dict[str, Any]', files: 'Dict[str, Any]') -> 'Tuple[bytes, bytes]':
     """
     Constructs request body in multipart/form-data format
 
@@ -86,7 +78,7 @@ def make_mfd(fields, files):
     files :: { field_name: [{ "filename" : fn, "body" : bytes }]}
     """
 
-    body = []
+    body = []  # type: List[bytes]
 
     for name, data in fields.items():
         if isinstance(data, list):
@@ -97,14 +89,14 @@ def make_mfd(fields, files):
         elif data is not None:
             body.extend(_create_field(name, data))
 
-    for name, files in files.items():
-        for file in files:
+    for name, data in files.items():
+        for file in data:
             body.extend(_create_file_field(
                 name, file['filename'], file['body'], file.get('content_type', 'application/unknown')
             ))
 
-    body.extend([b'--', BOUNDARY, b'--\r\n'])
-    content_type = b'multipart/form-data; boundary=' + BOUNDARY
+    body.extend([b'--', _BOUNDARY, b'--\r\n'])
+    content_type = b'multipart/form-data; boundary=' + _BOUNDARY
 
     return b''.join(body), content_type
 
@@ -120,7 +112,7 @@ def _create_field(name, data):
     name = _addslashes(any_to_bytes(name))
 
     return [
-        b'--', BOUNDARY,
+        b'--', _BOUNDARY,
         b'\r\nContent-Disposition: form-data; name="', name,
         b'"\r\n\r\n', any_to_bytes(data), b'\r\n'
     ]
@@ -136,7 +128,7 @@ def _create_file_field(name, filename, data, content_type):
     filename = _addslashes(any_to_bytes(filename))
 
     return [
-        b'--', BOUNDARY,
+        b'--', _BOUNDARY,
         b'\r\nContent-Disposition: form-data; name="', name, b'"; filename="', filename,
         b'"\r\nContent-Type: ', any_to_bytes(content_type),
         b'\r\n\r\n', any_to_bytes(data), b'\r\n'
@@ -173,7 +165,7 @@ def reverse_regex_named_groups(pattern, *args, **kwargs):
     return result.replace('^', '').replace('$', '')
 
 
-def get_abs_path(root_path, relative_path):
+def get_abs_path(root_path: str, relative_path: 'Optional[str]') -> str:
     if not relative_path:
         return root_path
     elif os.path.isabs(relative_path):

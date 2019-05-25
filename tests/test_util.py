@@ -5,7 +5,9 @@ from tornado.escape import to_unicode
 from tornado.httputil import HTTPFile, parse_body_arguments
 
 from frontik import media_types
-from frontik.util import any_to_bytes, any_to_unicode, make_mfd, make_qs, make_url, reverse_regex_named_groups
+from frontik.util import (
+    any_to_bytes, any_to_unicode, get_abs_path, make_mfd, make_qs, make_url, reverse_regex_named_groups
+)
 
 
 class TestUtil(unittest.TestCase):
@@ -135,3 +137,10 @@ class TestUtil(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             reverse_regex_named_groups(two_ids, id1=1)
+
+    def test_get_abs_path(self):
+        self.assertEqual('/root/dir', get_abs_path('/root/dir', None))
+        self.assertEqual('/root/dir', get_abs_path('/root/dir', ''))
+        self.assertEqual('/root/dir/subdir/test', get_abs_path('/root/dir', 'subdir/test'))
+        self.assertEqual('/root', get_abs_path('/root/dir', '../'))
+        self.assertEqual('/another/root', get_abs_path('/root/dir', '/another/root'))
