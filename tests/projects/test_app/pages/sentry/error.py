@@ -36,3 +36,4 @@ class Page(PageHandler):
 
     def initialize_sentry_logger(self, sentry_logger: SentryLogger):
         sentry_logger.user = {'id': '123456'}
+        sentry_logger.extra = {'extra': 'data'}
