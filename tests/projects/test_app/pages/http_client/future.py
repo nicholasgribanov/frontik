@@ -1,3 +1,5 @@
+from tornado.ioloop import IOLoop
+
 from frontik.handler import JsonPageHandler
 
 
@@ -24,7 +26,7 @@ class Page(JsonPageHandler):
                 'done_callback_called': True
             })
 
-            self.add_callback(self.wait_callback(handler_callback))
+            IOLoop.current().add_callback(self.wait_callback(handler_callback))
             assert not handler_callback_called
 
         request_future = self.post_url(self.request.host, self.request.path, callback=main_callback)

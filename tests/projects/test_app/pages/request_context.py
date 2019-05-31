@@ -2,6 +2,7 @@ import asyncio
 
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
+from tornado.ioloop import IOLoop
 
 from frontik import request_context
 from frontik.handler import JsonPageHandler
@@ -18,14 +19,14 @@ class Page(JsonPageHandler):
 
         self.json.put({'page': request_context.get_handler_name()})
 
-        self.add_callback(_waited_callback('callback'))
+        IOLoop.current().add_callback(_waited_callback('callback'))
 
         ThreadPoolExecutor(1).submit(_waited_callback('executor'))
 
         self.wait_future(asyncio.ensure_future(self.run_coroutine()))
 
         future = self.post_url(self.request.host, self.request.uri)
-        self.add_future(future, _waited_callback('future'))
+        IOLoop.current().add_future(future, _waited_callback('future'))
 
     async def run_coroutine(self):
         self.json.put({'coroutine_before_yield': request_context.get_handler_name()})

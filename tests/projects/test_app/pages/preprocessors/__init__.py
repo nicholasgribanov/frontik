@@ -2,6 +2,7 @@ import asyncio
 import time
 
 from tornado.concurrent import Future
+from tornado.ioloop import IOLoop
 from tornado.web import HTTPError
 
 from frontik.handler import JsonPageHandler
@@ -27,7 +28,7 @@ async def pp_await_future(handler):
     handler.run.append(result)
 
     wait_future = Future()
-    handler.add_timeout(time.time() + 0.1, lambda: wait_future.set_result('pp1-after'))
+    IOLoop.current().add_timeout(time.time() + 0.1, lambda: wait_future.set_result('pp1-after'))
     result = await wait_future
 
     handler.run.append(result)

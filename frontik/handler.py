@@ -157,18 +157,6 @@ class PageHandler(RequestHandler):
     def reverse_url(self, name, *args, **kwargs):
         return self.application.reverse_url(name, *args, **kwargs)
 
-    @staticmethod
-    def add_callback(callback, *args, **kwargs):
-        IOLoop.current().add_callback(callback, *args, **kwargs)
-
-    @staticmethod
-    def add_timeout(deadline, callback, *args, **kwargs):
-        return IOLoop.current().add_timeout(deadline, callback, *args, **kwargs)
-
-    @staticmethod
-    def add_future(future, callback):
-        IOLoop.current().add_future(future, callback)
-
     def wait_future(self, future: Future):
         if self._handler_futures is None:
             raise Exception('handler is already finished, calling wait_future at this time is incorrect')

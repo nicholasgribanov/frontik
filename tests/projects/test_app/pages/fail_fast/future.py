@@ -24,5 +24,5 @@ class Page(JsonPageHandler):
             else:
                 future.set_result(result)
 
-        self.add_timeout(IOLoop.current().time() + 0.3, _finish_future)
+        IOLoop.current().add_timeout(IOLoop.current().time() + 0.3, _finish_future)
         return future

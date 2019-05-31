@@ -1,6 +1,8 @@
 import time
 from asyncio import Future
 
+from tornado.ioloop import IOLoop
+
 from frontik.handler import JsonPageHandler
 from frontik.preprocessors import preprocessor
 
@@ -17,7 +19,7 @@ async def pp1(handler):
 
     def _cb1(_, __):
         handler.add_preprocessor_future(future)
-        handler.add_timeout(time.time() + 0.2, _cb2)
+        IOLoop.current().add_timeout(time.time() + 0.2, _cb2)
 
     handler.add_preprocessor_future(
         handler.post_url(handler.request.host, handler.request.uri, callback=_cb1)

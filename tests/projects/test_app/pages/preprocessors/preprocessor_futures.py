@@ -1,6 +1,7 @@
 import time
 
 from tornado.concurrent import Future
+from tornado.ioloop import IOLoop
 
 from frontik.handler import JsonPageHandler
 from frontik.preprocessors import preprocessor
@@ -15,7 +16,7 @@ def waiting_preprocessor(sleep_time_sec, preprocessor_name, add_preprocessor_fut
             wait_future.set_result(preprocessor_name)
 
         wait_future = Future()
-        handler.add_timeout(time.time() + sleep_time_sec, _put_to_completed)
+        IOLoop.current().add_timeout(time.time() + sleep_time_sec, _put_to_completed)
 
         if add_preprocessor_future:
             handler.add_preprocessor_future(wait_future)
