@@ -55,18 +55,23 @@ define('http_client_default_retry_policy', default='timeout,http_503', type=str)
 define('http_proxy_host', default=None, type=str)
 define('http_proxy_port', default=3128, type=int)
 define('http_client_allow_cross_datacenter_requests', default=False, type=bool)
-define('http_client_metrics_kafka_cluster', default=None, type=str)
 define('http_client_metrics_interval_sec', default=60, type=int)
 
+define('timeout_multiplier', default=1.0, type=float)
+
 define('kafka_clusters', default={}, type=dict)
+define('http_client_metrics_kafka_cluster', default=None, type=str)
 
 define('statsd_host', default=None, type=str)
 define('statsd_port', default=None, type=int)
 define('statsd_flush_interval_sec', default=1, type=float)
 define('statsd_packet_size_bytes', default=16 * 1024, type=int)
+
 define('gc_metrics_send_interval_ms', default=None, type=int)
 
-define('timeout_multiplier', default=1.0, type=float)
+define('consul_port', default=None, type=int)
+define('consul_http_check_interval_sec', default=10, type=int)
+define('consul_http_check_timeout_sec', default=0.5, type=float)
 
 define('xml_root', default=None, type=str)
 define('xml_cache_limit', default=None, type=int)

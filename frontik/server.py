@@ -88,6 +88,7 @@ def run_server(app: 'FrontikApplication'):
 
     def server_stop():
         http_server.stop()
+        asyncio.create_task(app.get_consul_client().agent.service.deregister(options.app))
 
         if ioloop_is_running():
             log.info('going down in %s seconds', options.stop_timeout)
@@ -137,8 +138,7 @@ def main(*config_files):
         async def async_init():
             try:
                 app = app_class(app_root=os.path.dirname(module.__file__), **options.as_dict())
-                init_futures = app.default_init_futures + list(app.init_async())
-                await asyncio.gather(*init_futures)
+                await app.init_async()
                 run_server(app)
 
             except Exception:

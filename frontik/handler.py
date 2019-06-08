@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING
 import tornado.curl_httpclient
 import tornado.web
 from tornado.httputil import HTTPHeaders
-from tornado.ioloop import IOLoop
 from tornado.options import options
 from tornado.web import RequestHandler
 
@@ -31,6 +30,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from typing import Any, Callable, Coroutine, List, Optional, Tuple, Type
 
     from aiokafka import AIOKafkaProducer
+    from consul.aio import Consul
     from tornado.httputil import HTTPServerRequest
 
     from frontik.app import FrontikApplication
@@ -96,7 +96,7 @@ class PageHandler(RequestHandler):
         self._preprocessor_futures = []  # type: List[Future]
         self._exception_hooks = []  # type: List[ExceptionHook]
 
-        for integration in application.available_integrations:
+        for integration in application.integrations:
             integration.initialize_handler(self)
 
         self._debug_access = None  # type: Optional[bool]
@@ -624,6 +624,9 @@ class PageHandler(RequestHandler):
 
     def get_statsd_client(self) -> 'Optional[StatsdClientWithTags]':  # pragma: no cover
         pass
+
+    def get_consul_client(self) -> 'Optional[Consul]':  # pragma: no cover
+        return None
 
 
 class ErrorHandler(PageHandler, tornado.web.ErrorHandler):

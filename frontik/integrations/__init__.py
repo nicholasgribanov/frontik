@@ -1,3 +1,4 @@
+import asyncio
 import importlib
 import logging
 import pkgutil
@@ -13,7 +14,7 @@ if TYPE_CHECKING:  # pragma: no cover
 integrations_logger = logging.getLogger('integrations')
 
 
-def load_integrations(app) -> 'Tuple[List[Integration], List[Future]]':
+async def load_integrations(app) -> 'List[Integration]':
     for _, module_name, _ in pkgutil.iter_modules(__path__):
         try:
             importlib.import_module(f'frontik.integrations.{module_name}')
@@ -31,7 +32,9 @@ def load_integrations(app) -> 'Tuple[List[Integration], List[Future]]':
 
         available_integrations.append(integration)
 
-    return available_integrations, init_futures
+    await asyncio.gather(*init_futures)
+
+    return available_integrations
 
 
 class Integration:

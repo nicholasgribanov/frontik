@@ -25,9 +25,9 @@ if TYPE_CHECKING:  # pragma: no cover
     from typing import Optional
 
     from aiokafka import AIOKafkaProducer
+    from consul.aio import Consul
     from tornado.httputil import HTTPServerRequest
 
-    from frontik.integrations.kafka import AIOKafkaProducer
     from frontik.integrations.sentry import SentryLogger
     from frontik.integrations.statsd import StatsdClientWithTags
 
@@ -62,8 +62,8 @@ class FrontikApplication(Application):
         self.http_client_factory = HttpClientFactory(getattr(self.config, 'http_upstreams', {}))
 
         self.router = FrontikRouter(self)
-        self.available_integrations, self.default_init_futures = integrations.load_integrations(self)
         self.slow_tasks_logger = bootstrap_logger('slow_tasks', logging.WARNING, use_json_formatter=False)
+        self.integrations = []
 
         super().__init__([
             (r'/version/?', VersionHandler),
@@ -72,6 +72,9 @@ class FrontikApplication(Application):
         ], **settings.get('tornado_settings', {}))
 
         self.transforms.insert(0, partial(DebugTransform, self))
+
+    async def init_async(self):
+        self.integrations = await integrations.load_integrations(self)
 
     def find_handler(self, request, **kwargs):
         request_id = request.headers.get('x-request-id')
@@ -113,9 +116,6 @@ class FrontikApplication(Application):
 
     def application_version(self):
         return 'unknown'
-
-    def init_async(self):
-        return []
 
     @staticmethod
     def next_request_id():
@@ -183,4 +183,7 @@ class FrontikApplication(Application):
         pass
 
     def get_statsd_client(self) -> 'Optional[StatsdClientWithTags]':  # pragma: no cover
+        pass
+
+    def get_consul_client(self) -> 'Optional[Consul]':  # pragma: no cover
         pass

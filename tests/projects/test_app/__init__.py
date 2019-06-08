@@ -16,9 +16,12 @@ class TestApplication(FrontikApplication):
 
         super().__init__(**settings)
 
+    async def init_async(self):
+        await super().init_async()
+
         try:
             from frontik.integrations.kafka import KafkaIntegration
-            kafka_integration = next(i for i in self.available_integrations if isinstance(i, KafkaIntegration))
+            kafka_integration = next(i for i in self.integrations if isinstance(i, KafkaIntegration))
             kafka_integration.kafka_producers = {'infrastructure': TestKafkaProducer()}
         except Exception:
             pass
