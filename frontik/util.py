@@ -2,7 +2,7 @@ import mimetypes
 import os.path
 import re
 from typing import TYPE_CHECKING
-from urllib.parse import urlencode
+from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 from uuid import uuid4
 
 from tornado.escape import to_unicode, utf8
@@ -31,7 +31,7 @@ def any_to_bytes(s: 'Any') -> bytes:
     return utf8(str(s))
 
 
-def make_qs(query_args):
+def make_qs(query_args: 'Dict[Any, Any]') -> str:
     return urlencode([(k, v) for k, v in query_args.items() if v is not None], doseq=True)
 
 
@@ -39,17 +39,20 @@ def make_body(data):
     return make_qs(data) if isinstance(data, dict) else any_to_bytes(data)
 
 
-def make_url(base, **query_args):
+def make_url(url: str, **query_args: 'Dict[Any, Any]') -> str:
     """
     Builds URL from base part and query arguments passed as kwargs.
     Returns unicode string
     """
-    qs = make_qs(query_args)
+    scheme, netloc, path, query, fragment = urlsplit(url)
+    if query:
+        qs = parse_qs(query, keep_blank_values=True)  # type: Dict[Any, Any]
+    else:
+        qs = {}
 
-    if qs:
-        return to_unicode(base) + ('&' if '?' in base else '?') + qs
+    qs.update(query_args)
 
-    return to_unicode(base)
+    return urlunsplit((scheme, netloc, path, make_qs(qs), fragment))
 
 
 def _decode_bytes_from_charset(string: bytes, charsets: 'Iterable[str]' = ('cp1251',)) -> str:
