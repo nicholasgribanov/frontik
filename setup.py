@@ -43,9 +43,9 @@ setup(
     ],
     test_suite='tests',
     tests_require=[
-        'pytest == 4.4.1',
+        'pytest == 4.6.3',
         'pycodestyle == 2.5.0',
-        'requests == 2.21.0',
+        'requests == 2.22.0',
         'lxml-asserts',
         'tornado-httpclient-mock',
     ],
