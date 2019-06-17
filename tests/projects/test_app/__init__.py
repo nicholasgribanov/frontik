@@ -30,7 +30,7 @@ class TestApplication(FrontikApplication):
         return 'last version'
 
     def application_urls(self):
-        return [(r'/api/\d+/store', api.Page)] + super().application_urls()
+        return [(r'/api/(\d+)/store/?', api.Page)] + super().application_urls()
 
 
 class TestKafkaProducer:

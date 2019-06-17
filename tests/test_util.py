@@ -5,9 +5,7 @@ from tornado.escape import to_unicode
 from tornado.httputil import HTTPFile, parse_body_arguments
 
 from frontik import media_types
-from frontik.util import (
-    any_to_bytes, any_to_unicode, get_abs_path, make_mfd, make_qs, make_url, reverse_regex_named_groups
-)
+from frontik.util import any_to_bytes, any_to_unicode, get_abs_path, make_mfd, make_qs, make_url
 
 
 class TestUtil(unittest.TestCase):
@@ -116,27 +114,6 @@ class TestUtil(unittest.TestCase):
         self.assertEqual(files['file3'][1]['filename'], r'file3-\part2\.unknown')
         self.assertEqual(files['file3'][1]['body'], b'BODY2')
         self.assertEqual(files['file3'][1]['content_type'], media_types.APPLICATION_OCTET_STREAM)
-
-    def test_reverse_regex_named_groups(self):
-        two_ids = r'/id/(?P<id1>[^/]+)/(?P<id2>[^/]+)'
-        two_ids_with_ending = r'/id/(?P<id1>[^/]+)/(?P<id2>[^/]+)(\?|$)'
-        two_ids_with_unnamed_groups = r'/id/(?P<id1>[^/]+)/(\w+)/(?P<id2>[^/]+)(\?|$)'
-
-        self.assertEqual('/id/1/2', reverse_regex_named_groups(two_ids, 1, 2))
-        self.assertEqual('/id/1/2', reverse_regex_named_groups(two_ids_with_ending, 1, 2))
-        self.assertEqual('/id/1//2', reverse_regex_named_groups(two_ids_with_unnamed_groups, 1, 2))
-        self.assertEqual('/id/1/2', reverse_regex_named_groups(two_ids, 1, id2=2, id3=3))
-        self.assertEqual('/id/1/2', reverse_regex_named_groups(two_ids_with_ending, 2, 3, id1='1'))
-        self.assertEqual('/id/1//2', reverse_regex_named_groups(two_ids_with_unnamed_groups, '1', id2=2))
-        self.assertEqual('/id/1/2', reverse_regex_named_groups(two_ids, id1=1, id2=2))
-        self.assertEqual('/id/1/2', reverse_regex_named_groups(two_ids_with_ending, id1='1', id2=2))
-        self.assertEqual('/id/1//2', reverse_regex_named_groups(two_ids_with_unnamed_groups, id1=1, id2='2'))
-
-        with self.assertRaises(ValueError):
-            reverse_regex_named_groups(two_ids, 1)
-
-        with self.assertRaises(ValueError):
-            reverse_regex_named_groups(two_ids, id1=1)
 
     def test_get_abs_path(self):
         self.assertEqual('/root/dir', get_abs_path('/root/dir', None))

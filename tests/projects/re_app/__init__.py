@@ -13,7 +13,7 @@ class TestApplication(FrontikApplication):
         return config
 
     def application_urls(self):
-        return config.urls
+        return config.urls + super().application_urls()
 
     def application_404_handler(self, request):
         return handler_404.Page, {}

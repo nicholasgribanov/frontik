@@ -1,6 +1,5 @@
 import mimetypes
 import os.path
-import re
 from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 from uuid import uuid4
@@ -140,32 +139,6 @@ def _create_file_field(name, filename, data, content_type):
 
 def get_cookie_or_url_param_value(handler: 'PageHandler', param_name: 'str') -> 'Optional[str]':
     return handler.get_argument(param_name, handler.get_cookie(param_name, None))
-
-
-def reverse_regex_named_groups(pattern, *args, **kwargs):
-    class GroupReplacer:
-        def __init__(self, args, kwargs):
-            self.args, self.kwargs = args, kwargs
-            self.current_arg = 0
-
-        def __call__(self, match):
-            value = ''
-            named_group = re.search(r'^\?P<(\w+)>(.*?)$', match.group(1))
-
-            if named_group:
-                group_name = named_group.group(1)
-                if group_name in self.kwargs:
-                    value = self.kwargs[group_name]
-                elif self.current_arg < len(self.args):
-                    value = self.args[self.current_arg]
-                    self.current_arg += 1
-                else:
-                    raise ValueError('Cannot reverse regex: required number of arguments not found')
-
-            return any_to_unicode(value)
-
-    result = re.sub(r'\(([^)]+)\)', GroupReplacer(args, kwargs), to_unicode(pattern))
-    return result.replace('^', '').replace('$', '')
 
 
 def get_abs_path(root_path: str, relative_path: 'Optional[str]') -> str:

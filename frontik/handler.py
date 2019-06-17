@@ -184,29 +184,29 @@ class PageHandler(RequestHandler):
         return super()._execute(transforms, *args, **kwargs)
 
     def get(self, *args, **kwargs):
-        self._execute_coroutine = self._execute_page(self.get_page)
+        self._execute_coroutine = self._execute_page(self.get_page, *args, **kwargs)
         asyncio.create_task(self._execute_coroutine)
 
     def post(self, *args, **kwargs):
-        self._execute_coroutine = self._execute_page(self.post_page)
+        self._execute_coroutine = self._execute_page(self.post_page, *args, **kwargs)
         asyncio.create_task(self._execute_coroutine)
 
     def head(self, *args, **kwargs):
-        self._execute_coroutine = self._execute_page(self.get_page)
+        self._execute_coroutine = self._execute_page(self.get_page, *args, **kwargs)
         asyncio.create_task(self._execute_coroutine)
 
     def delete(self, *args, **kwargs):
-        self._execute_coroutine = self._execute_page(self.delete_page)
+        self._execute_coroutine = self._execute_page(self.delete_page, *args, **kwargs)
         asyncio.create_task(self._execute_coroutine)
 
     def put(self, *args, **kwargs):
-        self._execute_coroutine = self._execute_page(self.put_page)
+        self._execute_coroutine = self._execute_page(self.put_page, *args, **kwargs)
         asyncio.create_task(self._execute_coroutine)
 
     def options(self, *args, **kwargs):
         self.__return_405()
 
-    async def _execute_page(self, page_handler_method: 'MethodType'):
+    async def _execute_page(self, page_handler_method: 'MethodType', *args, **kwargs):
         try:
             preprocessors = _unwrap_preprocessors(self.preprocessors) + _get_preprocessors(page_handler_method.__func__)
             preprocessors_completed = await self._run_preprocessors(preprocessors)
@@ -215,7 +215,7 @@ class PageHandler(RequestHandler):
                 self.log.info('page was already finished, skipping page method')
                 return
 
-            await page_handler_method()
+            await page_handler_method(*args, **kwargs)
 
             await self._wait_handler_futures()
 
@@ -235,19 +235,19 @@ class PageHandler(RequestHandler):
 
         self._handler_futures = None
 
-    async def get_page(self):
+    async def get_page(self, *args, **kwargs):
         """ This method can be implemented in the subclass """
         await self.__return_405()
 
-    async def post_page(self):
+    async def post_page(self, *args, **kwargs):
         """ This method can be implemented in the subclass """
         await self.__return_405()
 
-    async def put_page(self):
+    async def put_page(self, *args, **kwargs):
         """ This method can be implemented in the subclass """
         await self.__return_405()
 
-    async def delete_page(self):
+    async def delete_page(self, *args, **kwargs):
         """ This method can be implemented in the subclass """
         await self.__return_405()
 

@@ -18,7 +18,7 @@ from frontik.handler import ErrorHandler
 from frontik.http_client import HttpClientFactory
 from frontik.loggers import bootstrap_logger, CUSTOM_JSON_EXTRA, JSON_REQUESTS_LOGGER
 from frontik.renderers import jinja_renderer, json_renderer, xml_renderer, xslt_renderer
-from frontik.routing import FileMappingRouter, FrontikRouter
+from frontik.routing import FileMappingRouter
 from frontik.version import version as frontik_version
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -61,15 +61,18 @@ class FrontikApplication(Application):
 
         self.http_client_factory = HttpClientFactory(getattr(self.config, 'http_upstreams', {}))
 
-        self.router = FrontikRouter(self)
         self.slow_tasks_logger = bootstrap_logger('slow_tasks', logging.WARNING, use_json_formatter=False)
         self.integrations = []
 
-        super().__init__([
+        default_urls = [
             (r'/version/?', VersionHandler),
-            (r'/status/?', StatusHandler),
-            (r'.*', self.router),
-        ], **settings.get('tornado_settings', {}))
+            (r'/status/?', StatusHandler)
+        ]
+
+        super().__init__(
+            default_urls + self.application_urls(),
+            **settings.get('tornado_settings', {})
+        )
 
         self.transforms.insert(0, partial(DebugTransform, self))
 
@@ -100,12 +103,9 @@ class FrontikApplication(Application):
 
         return delegate
 
-    def reverse_url(self, name, *args, **kwargs):
-        return self.router.reverse_url(name, *args, **kwargs)
-
     def application_urls(self):
         return [
-            ('', FileMappingRouter(importlib.import_module(f'{self.app}.pages')))
+            ('.*', FileMappingRouter(importlib.import_module(f'{self.app}.pages'), self))
         ]
 
     def application_404_handler(self, request):

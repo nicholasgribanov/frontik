@@ -18,10 +18,6 @@ class TestRouting(unittest.TestCase):
         html = frontik_re_app.get_page_text('simple')
         self.assertIn('ok', html)
 
-    def test_bad_routing_delegate(self):
-        response = frontik_re_app.get_page('bad_delegate')
-        self.assertEqual(500, response.status_code)
-
     def test_extra_slash_in_regex(self):
         """Routes specified with regexps should match precisely"""
         self.assertEqual(frontik_re_app.get_page('//not_simple').status_code, 404)
@@ -47,11 +43,6 @@ class TestRouting(unittest.TestCase):
         response = frontik_test_app.get_page('error_on_import')
         self.assertEqual(response.status_code, 500)
 
-    def test_frontik_router_custom_404(self):
-        response = frontik_re_app.get_page('not_matching_regex')
-        self.assertEqual(response.status_code, 404)
-        self.assertEqual(response.content, b'404')
-
     def test_filemapping_default_404(self):
         response = frontik_test_app.get_page('no_page')
         self.assertEqual(response.status_code, 404)
@@ -66,12 +57,8 @@ class TestRouting(unittest.TestCase):
         self.assertEqual(response.content, b'404')
 
     def test_reverse_url(self):
-        json = frontik_re_app.get_page_json('reverse_url')
-        self.assertEqual(json, {
-            'args': '/id/1/2',
-            'args_and_kwargs': '/id/1/2',
-            'kwargs': '/id/1/2',
-        })
+        response = frontik_re_app.get_page('reverse_url')
+        self.assertEqual(response.content, b'/id/1/2')
 
     def test_reverse_url_fail(self):
         response = frontik_re_app.get_page('reverse_url?fail_args=true')

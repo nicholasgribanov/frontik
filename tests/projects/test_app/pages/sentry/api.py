@@ -8,7 +8,7 @@ class Page(JsonPageHandler):
     exceptions = []
     status = 200
 
-    async def post_page(self):
+    async def post_page(self, project_id):
         code = self.get_argument('set_code', None)
         if code is not None:
             Page.status = int(code)
@@ -19,12 +19,12 @@ class Page(JsonPageHandler):
         else:
             self.set_status(Page.status)
 
-    async def get_page(self):
+    async def get_page(self, project_id):
         self.json.put({
             'exceptions': [json.loads(e) for e in Page.exceptions]
         })
 
-    async def delete_page(self):
+    async def delete_page(self, project_id):
         Page.exceptions = []
         Page.status = 200
         self.get_sentry_logger().sentry_client.transport._disabled_until = datetime.utcnow() - timedelta(seconds=10)

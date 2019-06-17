@@ -65,12 +65,6 @@ class TestSyslog(unittest.TestCase):
                 }
             },
             {
-                'priority': '14',
-                'message': {
-                    'lvl': 'INFO', 'logger': r'frontik\.routing', 'msg': 'requested url: /log'
-                }
-            },
-            {
                 'priority': '15',
                 'message': {
                     'lvl': 'DEBUG', 'logger': r'handler', 'msg': 'debug'
