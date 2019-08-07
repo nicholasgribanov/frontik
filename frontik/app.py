@@ -10,6 +10,7 @@ from lxml import etree
 from tornado.options import options
 from tornado.stack_context import StackContext
 from tornado.web import Application, RequestHandler
+import traceback
 
 import frontik.producers.json_producer
 import frontik.producers.xml_producer
@@ -59,6 +60,38 @@ class StatusHandler(RequestHandler):
         self.finish(self.application.get_current_status())
 
 
+class PydevdHandler(RequestHandler):
+    def get(self):
+        if hasattr(sys, 'gettrace') and sys.gettrace() is not None:
+            self.already_tracing_page()
+            return
+
+        try:
+            port = self.get_argument('port', '32223')
+            ip = self.get_argument('ip', self.request.remote_ip)
+            self.settrace(ip, int(port))
+            self.trace_page(ip, port)
+
+        except BaseException:
+            self.error_page()
+
+    def settrace(self, ip, port):
+        import pydevd
+        pydevd.settrace(ip, port=port, stdoutToServer=True, stderrToServer=True, suspend=False)
+
+    def trace_page(self, ip, port):
+        self.set_header('Content-Type', media_types.TEXT_PLAIN)
+        self.finish('Connected to debug server at {ip}:{port}'.format(ip=ip, port=port))
+
+    def already_tracing_page(self):
+        self.set_header('Content-Type', media_types.TEXT_PLAIN)
+        self.finish('App is already in tracing mode, try to restart service')
+
+    def error_page(self):
+        self.set_header('Content-Type', media_types.TEXT_PLAIN)
+        self.finish(traceback.format_exc())
+
+
 class FrontikApplication(Application):
     request_id = 0
 
@@ -84,11 +117,16 @@ class FrontikApplication(Application):
         self.router = FrontikRouter(self)
         self.available_integrations, self.default_init_futures = integrations.load_integrations(self)
 
-        super().__init__([
+        core_handlers = [
             (r'/version/?', VersionHandler),
             (r'/status/?', StatusHandler),
             (r'.*', self.router),
-        ], **tornado_settings)
+        ]
+
+        if options.debug:
+            core_handlers.insert(0, (r'/pydevd/?', PydevdHandler))
+
+        super().__init__(core_handlers, **tornado_settings)
 
         self.transforms.insert(0, partial(DebugTransform, self))
 
