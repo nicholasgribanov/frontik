@@ -1,5 +1,6 @@
 import os
 import unittest
+from functools import partial
 
 from frontik.file_cache import FileCache, LimitedDict
 
@@ -80,3 +81,18 @@ class TestFileCache(unittest.TestCase):
 
         c.load('parse_error.xsl', log)
         self.assertIn('reading file', log.message)
+
+    def test_populate(self):
+        c = FileCache('test', self.CACHE_DIR, lambda filename, log: filename, max_len=3)
+        log = TestFileCache.MockLog()
+
+        c.populate(['simple.xsl', 'parse_error.xsl', 'syntax_error.xsl'], log)
+
+        self.assertEqual(len(c.cache), 3)
+
+        c.load('apply_error.xsl', log)
+        self.assertIn('reading file', log.message)
+
+        c.populate(['simple.xsl', 'parse_error.xsl', 'simple.xsl'], log, freeze=True)
+
+        self.assertRaises(Exception, partial(c.load, 'apply_error.xsl', log))
