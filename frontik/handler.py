@@ -619,6 +619,8 @@ class PageHandler(RequestHandler):
                  connect_timeout=None, request_timeout=None, max_timeout_tries=None, idempotent=False,
                  callback=None, waited=True, parse_response=True, parse_on_error=True, fail_fast=False):
 
+        self.log.info('rrr HELLO FROM FRONTIK!')
+
         fail_fast = _fail_fast_policy(fail_fast, waited, host, uri)
 
         client_method = lambda callback: self._http_client.post_url(
