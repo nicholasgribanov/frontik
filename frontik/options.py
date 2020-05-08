@@ -42,6 +42,9 @@ define('syslog_port', default=logging.handlers.SYSLOG_UDP_PORT, type=int)
 define('syslog_facility', default='user', type=str)
 
 define('suppressed_loggers', default=['tornado.curl_httpclient'], type=list)
+define('curl_debug_enable', default=False, type=bool)
+define('curl_debug_diff_threshold_ms', default=10, type=int)
+
 
 define('debug', default=False, type=bool)
 define('debug_login', default=None, type=str)

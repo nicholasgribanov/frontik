@@ -4,6 +4,8 @@ import re
 import socket
 import time
 from asyncio import Future
+from collections import defaultdict
+from datetime import datetime
 
 from functools import partial
 from random import shuffle, random
@@ -454,7 +456,8 @@ class BalancedHttpRequest:
 
 
 class HttpClientFactory:
-    def __init__(self, application, upstreams):
+    def __init__(self, application, upstreams, curl_debug_enable=False):
+        self.curl_debug_enable = curl_debug_enable
         AsyncHTTPClient.configure('tornado.curl_httpclient.CurlAsyncHTTPClient', max_clients=options.max_http_clients)
 
         self.tornado_http_client = AsyncHTTPClient()
@@ -502,7 +505,7 @@ class HttpClientFactory:
             self.upstreams, modify_http_request_hook,
             self.application.statsd_client,
             kafka_producer,
-            debug_mode=handler.debug_mode, timeout_checker=timeout_checker
+            debug_mode=handler.debug_mode, timeout_checker=timeout_checker, curl_debug=self.curl_debug_enable
         )
 
     def update_upstream(self, name, config):
@@ -533,9 +536,25 @@ class HttpClientFactory:
         http_client_logger.info('update %s upstream: %s', name, str(upstream))
 
 
+def _format_curl_debug(_curl_debug):
+    debug_types = ('I', '<', '>', '<', '>')
+    logs = []
+    for date_time, debug_type, debug_msg in _curl_debug:
+        if debug_type == 0:
+            debug_msg = to_unicode(debug_msg)
+            logs.append(f'{date_time}: {debug_msg.strip()}')
+        elif debug_type in (1, 2):
+            debug_msg = to_unicode(debug_msg)
+            for line in debug_msg.splitlines():
+                logs.append(f'{date_time}: {debug_types[debug_type]} {line}')
+        elif debug_type == 4:
+            logs.append(f'{date_time}: {debug_types[debug_type]} {repr(debug_msg)}')
+    return '\n'.join(logs)
+
+
 class HttpClient:
     def __init__(self, http_client_impl, source_app, upstreams, modify_http_request_hook,
-                 statsd_client, kafka_producer, *, debug_mode=False, timeout_checker=None):
+                 statsd_client, kafka_producer, *, debug_mode=False, timeout_checker=None, curl_debug=False):
         self.http_client_impl = http_client_impl
         self.source_app = source_app
         self.debug_mode = debug_mode
@@ -544,6 +563,12 @@ class HttpClient:
         self.statsd_client = statsd_client
         self.kafka_producer = kafka_producer
         self.timeout_checker = timeout_checker
+        self._curl_debug = curl_debug
+        self._curl_debug_buffer = defaultdict(list) if curl_debug else None
+
+    def _debug_function(self, balanced_request, debug_type, debug_msg):
+        if self._curl_debug:
+            self._curl_debug_buffer[balanced_request].append((datetime.now(), debug_type, debug_msg))
 
     def get_upstream(self, host):
         return self.upstreams.get(host, Upstream.get_single_host_upstream())
@@ -670,15 +695,20 @@ class HttpClient:
 
         if isinstance(self.http_client_impl, CurlAsyncHTTPClient):
             request.prepare_curl_callback = partial(
-                self._prepare_curl_callback, next_callback=request.prepare_curl_callback
+                self._prepare_curl_callback, next_callback=request.prepare_curl_callback,
+                debug_function=partial(self._debug_function, balanced_request) if self._curl_debug else None
             )
 
         self.http_client_impl.fetch(request, callback, raise_error=False)
 
     @staticmethod
-    def _prepare_curl_callback(curl, next_callback):
+    def _prepare_curl_callback(curl, next_callback, debug_function):
         curl.setopt(pycurl.NOSIGNAL, 1)
-
+        if debug_function:
+            curl.setopt(pycurl.VERBOSE, True)
+            curl.setopt(pycurl.DEBUGFUNCTION, debug_function)
+        else:
+            curl.setopt(pycurl.VERBOSE, False)
         if callable(next_callback):
             next_callback(curl)
 
@@ -721,8 +751,15 @@ class HttpClient:
         log_method(log_message, extra=debug_extra)
 
         if response.code == 599:
-            timings_info = ('{}={}ms'.format(stage, int(timing * 1000)) for stage, timing in response.time_info.items())
+            timings_info = ('{}={}ms'.format(stage, timing * 1000) for stage, timing in response.time_info.items())
             http_client_logger.info('Curl timings: %s', ' '.join(timings_info))
+            if self._curl_debug:
+                total_request_time_ms = response.time_info['total'] * 1000
+                sum_stage_timings_ms = sum(timing * 1000 for stage, timing in response.time_info.items() if stage != 'total')
+                if total_request_time_ms - sum_stage_timings_ms > options.curl_debug_diff_threshold_ms:
+                    http_client_logger.info('Curl debug for request with big timings diff: %s',
+                                            _format_curl_debug(self._curl_debug_buffer[balanced_request]))
+                self._curl_debug_buffer[balanced_request] = []
 
         self.statsd_client.stack()
         self.statsd_client.count(

@@ -136,7 +136,7 @@ class FrontikApplication(Application):
         self.service_discovery_client = get_async_service_discovery(options, hostname=socket.gethostname())
         self.transforms.insert(0, partial(DebugTransform, self))
 
-        self.http_client_factory = HttpClientFactory(self, getattr(self.config, 'http_upstreams', {}))
+        self.http_client_factory = HttpClientFactory(self, getattr(self.config, 'http_upstreams', {}), options.curl_debug_enable)
 
         self.available_integrations, default_init_futures = integrations.load_integrations(self)
 
