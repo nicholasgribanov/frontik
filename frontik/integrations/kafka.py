@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 from aiokafka import AIOKafkaProducer
 from tornado import gen
 
-from frontik.integrations import Integration
+from frontik.integrations import Integration, integrations_logger
 from frontik.options import options
 
 if TYPE_CHECKING:
@@ -21,6 +21,8 @@ class KafkaIntegration(Integration):
             return self.kafka_producers.get(producer_name)
 
         app.get_kafka_producer = get_kafka_producer
+        if options.trace_kafka:
+            integrations_logger.info('Set get_kafka_producer %s to app %s' ,app.get_kafka_producer, app)
 
         if options.kafka_clusters:
             init_futures = []
@@ -37,3 +39,5 @@ class KafkaIntegration(Integration):
 
     def initialize_handler(self, handler):
         handler.get_kafka_producer = handler.application.get_kafka_producer
+        if options.trace_kafka:
+            integrations_logger.info('Set get_kafka_producer %s to handler %s', handler.application.get_kafka_producer, handler)

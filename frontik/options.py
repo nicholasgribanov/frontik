@@ -42,7 +42,7 @@ define('syslog_port', default=logging.handlers.SYSLOG_UDP_PORT, type=int)
 define('syslog_facility', default='user', type=str)
 
 define('suppressed_loggers', default=['tornado.curl_httpclient'], type=list)
-
+define('trace_kafka', default=True, type=bool)
 define('debug', default=False, type=bool)
 define('debug_login', default=None, type=str)
 define('debug_password', default=None, type=str)
