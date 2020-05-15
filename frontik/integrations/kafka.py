@@ -22,7 +22,7 @@ class KafkaIntegration(Integration):
 
         app.get_kafka_producer = get_kafka_producer
         if options.trace_kafka:
-            integrations_logger.info('Set get_kafka_producer %s to app %s' ,app.get_kafka_producer, app)
+            integrations_logger.info('Set get_kafka_producer %s to app %s', app.get_kafka_producer, app)
 
         if options.kafka_clusters:
             init_futures = []
@@ -40,4 +40,8 @@ class KafkaIntegration(Integration):
     def initialize_handler(self, handler):
         handler.get_kafka_producer = handler.application.get_kafka_producer
         if options.trace_kafka:
-            integrations_logger.info('Set get_kafka_producer %s to handler %s', handler.application.get_kafka_producer, handler)
+            integrations_logger.info(
+                'Set get_kafka_producer %s to handler %s',
+                handler.application.get_kafka_producer,
+                handler
+            )
