@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import tornado.curl_httpclient
 import tornado.httputil
 import tornado.web
-from tornado import gen, stack_context
+from tornado import gen
 from tornado.ioloop import IOLoop
 from tornado.options import options
 from tornado.web import RequestHandler
@@ -30,6 +30,8 @@ from frontik.loggers.stages import StagesLogger
 from frontik.preprocessors import _get_preprocessors, _unwrap_preprocessors
 from frontik.util import make_url
 from frontik.version import version as frontik_version
+from frontik import stack_context
+
 
 if TYPE_CHECKING:
     from http_client import BalancedHttpRequest
